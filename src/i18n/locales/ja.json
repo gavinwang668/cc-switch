@@ -1145,7 +1145,12 @@
     "reasoningEffortToggle": "思考レベルに対応",
     "reasoningEffortHint": "上流が low/high/max などの思考の深さの制御に対応している場合に有効化します。有効にすると思考モードも自動的にオンになり、Codex の reasoning.effort を上流の Chat パラメータに変換します。",
     "reasoningSectionToggle": "思考能力（詳細・通常は自動識別）",
-    "reasoningSectionHint": "プリセットの供給元は自動的に設定され、カスタム供給元は名前/URL から自動推論されます。自動識別が正しくない場合のみ展開して手動で上書きしてください。"
+    "reasoningSectionHint": "プリセットの供給元は自動的に設定され、カスタム供給元は名前/URL から自動推論されます。自動識別が正しくない場合のみ展開して手動で上書きしてください。",
+    "apiFormatLabel": "API 形式",
+    "apiFormatResponses": "OpenAI Responses API",
+    "apiFormatChat": "OpenAI Chat Completions",
+    "apiFormatChatHint": "Codex は現在、OpenAI Responses API と GPT シリーズモデルのみをネイティブにサポートしています。上流の供給元が Chat Completions プロトコルまたは DeepSeek、Kimi などの非 GPT モデルを使用する場合は、このオプションを選択してローカルルーティングを有効にしてください。",
+    "apiFormatResponsesHint": "供給元がネイティブの OpenAI Responses API でない場合、またはモデル名が Codex のデフォルトの GPT シリーズでない場合は、Chat Completions を選択してください。"
   },
   "geminiConfig": {
     "envFile": "環境変数 (.env)",

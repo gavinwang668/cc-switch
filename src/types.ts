@@ -505,6 +505,7 @@ export interface ClaudeModelConfig {
 export interface CodexModelConfig {
   model?: string;
   reasoningEffort?: string;
+  apiFormat?: "openai_responses" | "openai_chat";
 }
 
 // Gemini 模型配置

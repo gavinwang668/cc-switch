@@ -5,6 +5,13 @@ import { FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -134,7 +141,6 @@ export function CodexFormFields({
   const [fetchedModels, setFetchedModels] = useState<FetchedModel[]>([]);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
-  const needsLocalRouting = apiFormat === "openai_chat";
   const canEditCatalog = Boolean(onCatalogModelsChange);
   const canEditReasoning = Boolean(onCodexChatReasoningChange);
   const supportsThinking =
@@ -172,13 +178,6 @@ export function CodexFormFields({
     lastSentModelsRef.current = next;
     onCatalogModelsChange(next);
   }, [catalogRows, onCatalogModelsChange]);
-
-  const handleLocalRoutingChange = useCallback(
-    (checked: boolean) => {
-      onApiFormatChange(checked ? "openai_chat" : "openai_responses");
-    },
-    [onApiFormatChange],
-  );
 
   const handleReasoningThinkingChange = useCallback(
     (checked: boolean) => {
@@ -321,39 +320,48 @@ export function CodexFormFields({
         />
       )}
 
-      {shouldShowSpeedTest && (
-        <div className="space-y-3 rounded-lg border border-border-default bg-muted/20 p-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-1">
-              <FormLabel>
-                {t("codexConfig.localRoutingToggle", {
-                  defaultValue: "需要本地路由映射",
+      <div className="space-y-3 rounded-lg border border-border-default bg-muted/20 p-4">
+        <div className="space-y-2">
+          <FormLabel>
+            {t("codexConfig.apiFormatLabel", {
+              defaultValue: "API 格式",
+            })}
+          </FormLabel>
+          <Select
+            value={apiFormat}
+            onValueChange={(value) => onApiFormatChange(value as CodexApiFormat)}
+          >
+            <SelectTrigger id="codex-api-format">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="openai_responses">
+                {t("codexConfig.apiFormatResponses", {
+                  defaultValue: "OpenAI Responses API",
                 })}
-              </FormLabel>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {needsLocalRouting
-                  ? t("codexConfig.localRoutingOnHint", {
-                      defaultValue:
-                        "Codex 目前仅原生支持 OpenAI Responses API 与 GPT 系列模型；如果您的供应商使用 Chat Completions 协议或非 GPT 模型（如 DeepSeek、Kimi），则需要打开本开关，并在使用过程中保持本地路由开启。",
-                    })
-                  : t("codexConfig.localRoutingOffHint", {
-                      defaultValue:
-                        "如果您的供应商不是原生 OpenAI Responses API，或者模型名不是 Codex 默认的 GPT 系列，请打开此开关。",
-                    })}
-              </p>
-            </div>
-            <Switch
-              checked={needsLocalRouting}
-              onCheckedChange={handleLocalRoutingChange}
-              aria-label={t("codexConfig.localRoutingToggle", {
-                defaultValue: "需要本地路由映射",
-              })}
-            />
-          </div>
+              </SelectItem>
+              <SelectItem value="openai_chat">
+                {t("codexConfig.apiFormatChat", {
+                  defaultValue: "OpenAI Chat Completions",
+                })}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {apiFormat === "openai_chat"
+              ? t("codexConfig.apiFormatChatHint", {
+                  defaultValue:
+                    "Codex 目前仅原生支持 OpenAI Responses API 与 GPT 系列模型；如果您的供应商使用 Chat Completions 协议或非 GPT 模型（如 DeepSeek、Kimi），请选择此项并保持本地路由开启。",
+                })
+              : t("codexConfig.apiFormatResponsesHint", {
+                  defaultValue:
+                    "如果您的供应商不是原生 OpenAI Responses API，或者模型名不是 Codex 默认的 GPT 系列，请选择 Chat Completions。",
+                })}
+          </p>
         </div>
-      )}
+      </div>
 
-      {needsLocalRouting && canEditReasoning && (
+      {apiFormat === "openai_chat" && canEditReasoning && (
         <Collapsible
           open={reasoningExpanded}
           onOpenChange={setReasoningExpanded}
@@ -434,8 +442,8 @@ export function CodexFormFields({
         </Collapsible>
       )}
 
-      {/* Codex 模型映射 —— 仅在本地路由 + 可编辑时显示 */}
-      {needsLocalRouting && canEditCatalog && (
+      {/* Codex 模型映射 —— 仅在 Chat Completions 模式 + 可编辑时显示 */}
+      {apiFormat === "openai_chat" && canEditCatalog && (
         <div className="space-y-4 rounded-lg border border-border-default p-4">
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-3">

@@ -1145,7 +1145,12 @@
     "reasoningEffortToggle": "Supports Reasoning Effort",
     "reasoningEffortHint": "Enable when the upstream supports thinking-depth control such as low/high/max. Enabling this also turns on thinking mode and converts Codex's reasoning.effort into the upstream Chat parameter.",
     "reasoningSectionToggle": "Reasoning Capability (Advanced · usually auto-detected)",
-    "reasoningSectionHint": "Preset providers are configured automatically; custom providers are inferred from name/URL. Expand to override manually only when auto-detection is wrong."
+    "reasoningSectionHint": "Preset providers are configured automatically; custom providers are inferred from name/URL. Expand to override manually only when auto-detection is wrong.",
+    "apiFormatLabel": "API Format",
+    "apiFormatResponses": "OpenAI Responses API",
+    "apiFormatChat": "OpenAI Chat Completions",
+    "apiFormatChatHint": "Codex currently only natively supports OpenAI Responses API and GPT series models. If your provider uses Chat Completions protocol or non-GPT models (such as DeepSeek, Kimi), select this option and keep local routing enabled.",
+    "apiFormatResponsesHint": "If your provider is not native OpenAI Responses API, or the model name is not Codex's default GPT series, select Chat Completions."
   },
   "geminiConfig": {
     "envFile": "Environment Variables (.env)",

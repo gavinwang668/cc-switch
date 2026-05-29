@@ -1091,7 +1091,12 @@
     "modelNamePlaceholder": "例如: gpt-5-codex",
     "contextWindow1M": "1M 上下文視窗",
     "autoCompactLimit": "壓縮閾值",
-    "autoCompactLimitHint": "上下文 token 數達到此閾值時自動壓縮歷史"
+    "autoCompactLimitHint": "上下文 token 數達到此閾值時自動壓縮歷史",
+    "apiFormatLabel": "API 格式",
+    "apiFormatResponses": "OpenAI Responses API",
+    "apiFormatChat": "OpenAI Chat Completions",
+    "apiFormatChatHint": "Codex 目前僅原生支援 OpenAI Responses API 與 GPT 系列模型；如果您的供應商使用 Chat Completions 協議或非 GPT 模型（如 DeepSeek、Kimi），請選擇此選項並保持本地路由開啟。",
+    "apiFormatResponsesHint": "如果您的供應商不是原生 OpenAI Responses API，或者模型名不是 Codex 預設的 GPT 系列，請選擇 Chat Completions。"
   },
   "geminiConfig": {
     "envFile": "環境變數 (.env)",
