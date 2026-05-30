@@ -1,6 +1,15 @@
 import type { ProviderCategory } from "@/types";
 
 /**
+ * Gemini API 协议模式
+ */
+export type GeminiApiMode =
+  | "gemini_native"
+  | "openai_chat"
+  | "anthropic_messages"
+  | "amazon_bedrock";
+
+/**
  * Gemini 预设供应商的视觉主题配置
  */
 export interface GeminiPresetTheme {
@@ -11,6 +20,17 @@ export interface GeminiPresetTheme {
   /** 文字色（选中状态），支持 hex 颜色 */
   textColor?: string;
 }
+
+/** Gemini API 模式选项 */
+export const geminiApiModes: Array<{
+  value: GeminiApiMode;
+  labelKey: string;
+}> = [
+  { value: "gemini_native", labelKey: "gemini.form.apiModeGeminiNative" },
+  { value: "openai_chat", labelKey: "gemini.form.apiModeOpenAiChat" },
+  { value: "anthropic_messages", labelKey: "gemini.form.apiModeAnthropicMessages" },
+  { value: "amazon_bedrock", labelKey: "gemini.form.apiModeAmazonBedrock" },
+];
 
 export interface GeminiProviderPreset {
   name: string;

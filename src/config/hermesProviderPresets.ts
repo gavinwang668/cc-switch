@@ -74,7 +74,8 @@ export type HermesApiMode =
   | "chat_completions"
   | "anthropic_messages"
   | "codex_responses"
-  | "bedrock_converse";
+  | "bedrock_converse"
+  | "google_generative_ai";
 
 /** Default mode used when a provider has no stored value yet. */
 export const HERMES_DEFAULT_API_MODE: HermesApiMode = "chat_completions";
@@ -93,6 +94,10 @@ export const hermesApiModes: Array<{
   {
     value: "bedrock_converse",
     labelKey: "hermes.form.apiModeBedrockConverse",
+  },
+  {
+    value: "google_generative_ai",
+    labelKey: "hermes.form.apiModeGoogleGenerativeAi",
   },
 ];
 

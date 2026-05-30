@@ -893,6 +893,12 @@ export function ClaudeDesktopProviderForm({
                             "Gemini Native generateContent (需开启路由)",
                         })}
                       </SelectItem>
+                      <SelectItem value="amazon_bedrock">
+                        {t("providerForm.apiFormatAmazonBedrock", {
+                          defaultValue:
+                            "Amazon Bedrock Converse API (需开启路由)",
+                        })}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

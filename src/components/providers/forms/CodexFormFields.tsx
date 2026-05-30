@@ -5,6 +5,13 @@ import { FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -323,32 +330,53 @@ export function CodexFormFields({
 
       {shouldShowSpeedTest && (
         <div className="space-y-3 rounded-lg border border-border-default bg-muted/20 p-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-1">
-              <FormLabel>
-                {t("codexConfig.localRoutingToggle", {
-                  defaultValue: "需要本地路由映射",
-                })}
-              </FormLabel>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {needsLocalRouting
-                  ? t("codexConfig.localRoutingOnHint", {
-                      defaultValue:
-                        "Codex 目前仅原生支持 OpenAI Responses API 与 GPT 系列模型；如果您的供应商使用 Chat Completions 协议或非 GPT 模型（如 DeepSeek、Kimi），则需要打开本开关，并在使用过程中保持本地路由开启。",
-                    })
-                  : t("codexConfig.localRoutingOffHint", {
-                      defaultValue:
-                        "如果您的供应商不是原生 OpenAI Responses API，或者模型名不是 Codex 默认的 GPT 系列，请打开此开关。",
-                    })}
-              </p>
-            </div>
-            <Switch
-              checked={needsLocalRouting}
-              onCheckedChange={handleLocalRoutingChange}
-              aria-label={t("codexConfig.localRoutingToggle", {
-                defaultValue: "需要本地路由映射",
-              })}
-            />
+          <div className="space-y-2">
+            <FormLabel>
+              {t("providerForm.apiFormat", { defaultValue: "API 格式" })}
+            </FormLabel>
+            <Select value={apiFormat} onValueChange={onApiFormatChange}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="openai_responses">
+                  {t("providerForm.apiFormatOpenAIResponses", {
+                    defaultValue: "OpenAI Responses (原生)",
+                  })}
+                </SelectItem>
+                <SelectItem value="openai_chat">
+                  {t("providerForm.apiFormatOpenAIChat", {
+                    defaultValue: "OpenAI Chat Completions (需开启路由)",
+                  })}
+                </SelectItem>
+                <SelectItem value="anthropic">
+                  {t("providerForm.apiFormatAnthropic", {
+                    defaultValue: "Anthropic Messages (需开启路由)",
+                  })}
+                </SelectItem>
+                <SelectItem value="gemini_native">
+                  {t("providerForm.apiFormatGeminiNative", {
+                    defaultValue: "Gemini Native generateContent (需开启路由)",
+                  })}
+                </SelectItem>
+                <SelectItem value="amazon_bedrock">
+                  {t("providerForm.apiFormatAmazonBedrock", {
+                    defaultValue: "Amazon Bedrock Converse API (需开启路由)",
+                  })}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {apiFormat === "openai_responses"
+                ? t("codexConfig.localRoutingOffHint", {
+                    defaultValue:
+                      "Codex 目前仅原生支持 OpenAI Responses API 与 GPT 系列模型。",
+                  })
+                : t("codexConfig.localRoutingOnHint", {
+                    defaultValue:
+                      "如果您的供应商不是原生 OpenAI Responses API，或者模型名不是 Codex 默认的 GPT 系列，请选择相应的格式。",
+                  })}
+            </p>
           </div>
         </div>
       )}

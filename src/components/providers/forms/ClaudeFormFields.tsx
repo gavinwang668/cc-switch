@@ -720,6 +720,11 @@ export function ClaudeFormFields({
                         defaultValue: "Gemini Native generateContent (需转换)",
                       })}
                     </SelectItem>
+                    <SelectItem value="amazon_bedrock">
+                      {t("providerForm.apiFormatAmazonBedrock", {
+                        defaultValue: "Amazon Bedrock Converse API (需转换)",
+                      })}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">

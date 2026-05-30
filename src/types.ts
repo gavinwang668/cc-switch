@@ -236,16 +236,26 @@ export type SkillStorageLocation = "cc_switch" | "unified";
 // - "openai_chat": OpenAI Chat Completions 格式，需要格式转换
 // - "openai_responses": OpenAI Responses API 格式，需要格式转换
 // - "gemini_native": Gemini Native generateContent API 格式，需要格式转换
+// - "amazon_bedrock": Amazon Bedrock Converse API 格式
 export type ClaudeApiFormat =
   | "anthropic"
   | "openai_chat"
   | "openai_responses"
-  | "gemini_native";
+  | "gemini_native"
+  | "amazon_bedrock";
 
 // Codex API 格式类型
 // - "openai_responses": OpenAI Responses API 格式，直接透传
 // - "openai_chat": OpenAI Chat Completions 格式，需要本地路由转换
-export type CodexApiFormat = "openai_responses" | "openai_chat";
+// - "anthropic": Anthropic Messages API 格式
+// - "gemini_native": Gemini Native generateContent API 格式
+// - "amazon_bedrock": Amazon Bedrock Converse API 格式
+export type CodexApiFormat =
+  | "openai_responses"
+  | "openai_chat"
+  | "anthropic"
+  | "gemini_native"
+  | "amazon_bedrock";
 
 export interface CodexCatalogModel {
   model: string;

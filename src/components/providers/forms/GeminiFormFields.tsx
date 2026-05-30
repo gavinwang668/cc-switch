@@ -3,6 +3,13 @@ import { useTranslation } from "react-i18next";
 import { FormLabel } from "@/components/ui/form";
 import { Download, Info, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import EndpointSpeedTest from "./EndpointSpeedTest";
 import { ApiKeySection, EndpointField, ModelInputWithFetch } from "./shared";
@@ -12,6 +19,7 @@ import {
   type FetchedModel,
 } from "@/lib/api/model-fetch";
 import type { ProviderCategory } from "@/types";
+import { geminiApiModes, type GeminiApiMode } from "@/config/geminiProviderPresets";
 
 interface EndpointCandidate {
   url: string;
@@ -44,6 +52,10 @@ interface GeminiFormFieldsProps {
   model: string;
   onModelChange: (value: string) => void;
 
+  // API Mode
+  apiMode: GeminiApiMode;
+  onApiModeChange: (mode: GeminiApiMode) => void;
+
   // Speed Test Endpoints
   speedTestEndpoints: EndpointCandidate[];
 }
@@ -69,6 +81,8 @@ export function GeminiFormFields({
   shouldShowModelField,
   model,
   onModelChange,
+  apiMode,
+  onApiModeChange,
   speedTestEndpoints,
 }: GeminiFormFieldsProps) {
   const { t } = useTranslation();
@@ -128,6 +142,35 @@ export function GeminiFormFields({
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* API 模式选择 */}
+      {!isGoogleOfficial && (
+        <div className="space-y-2">
+          <FormLabel htmlFor="gemini-api-mode">
+            {t("gemini.form.apiMode", { defaultValue: "API 模式" })}
+          </FormLabel>
+          <Select
+            value={apiMode}
+            onValueChange={(v) => onApiModeChange(v as GeminiApiMode)}
+          >
+            <SelectTrigger id="gemini-api-mode">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {geminiApiModes.map((mode) => (
+                <SelectItem key={mode.value} value={mode.value}>
+                  {t(mode.labelKey, { defaultValue: mode.value })}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {t("gemini.form.apiModeHint", {
+              defaultValue: "供应商 API 协议。请根据端点选择正确的协议。",
+            })}
+          </p>
         </div>
       )}
 
