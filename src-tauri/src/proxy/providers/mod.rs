@@ -32,6 +32,7 @@ pub mod transform;
 pub mod transform_codex_chat;
 pub mod transform_gemini;
 pub mod transform_responses;
+pub mod transform_bedrock;
 
 use crate::app_config::AppType;
 use crate::provider::Provider;

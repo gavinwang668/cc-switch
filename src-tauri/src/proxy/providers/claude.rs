@@ -7,6 +7,7 @@
 //! - **openai_chat**: OpenAI Chat Completions 格式，需要 Anthropic ↔ OpenAI 转换
 //! - **openai_responses**: OpenAI Responses API 格式，需要 Anthropic ↔ Responses 转换
 //! - **gemini_native**: Google Gemini Native generateContent 格式，需要 Anthropic ↔ Gemini 转换
+//! - **bedrock_native**: Amazon Bedrock Converse API 格式，需要 Anthropic ↔ Bedrock 转换
 //!
 //! ## 认证模式
 //! - **Claude**: Anthropic 官方 API (x-api-key + anthropic-version)
@@ -37,6 +38,7 @@ pub fn get_claude_api_format(provider: &Provider) -> &'static str {
                 "openai_chat" => "openai_chat",
                 "openai_responses" => "openai_responses",
                 "gemini_native" => "gemini_native",
+                "bedrock_native" => "bedrock_native",
                 _ => "anthropic",
             };
         }
@@ -52,6 +54,7 @@ pub fn get_claude_api_format(provider: &Provider) -> &'static str {
             "openai_chat" => "openai_chat",
             "openai_responses" => "openai_responses",
             "gemini_native" => "gemini_native",
+            "bedrock_native" => "bedrock_native",
             _ => "anthropic",
         };
     }
@@ -78,7 +81,7 @@ pub fn get_claude_api_format(provider: &Provider) -> &'static str {
 pub fn claude_api_format_needs_transform(api_format: &str) -> bool {
     matches!(
         api_format,
-        "openai_chat" | "openai_responses" | "gemini_native"
+        "openai_chat" | "openai_responses" | "gemini_native" | "bedrock_native"
     )
 }
 
@@ -216,6 +219,7 @@ pub fn transform_claude_request_for_api_format(
             Some(&provider.id),
             session_id,
         ),
+        "bedrock_native" => super::transform_bedrock::anthropic_to_bedrock(body),
         _ => Ok(body),
     }
 }
@@ -703,7 +707,7 @@ impl ProviderAdapter for ClaudeAdapter {
         // - "openai_responses": 需要 Anthropic ↔ OpenAI Responses API 格式转换
         matches!(
             self.get_api_format(provider),
-            "openai_chat" | "openai_responses" | "gemini_native"
+            "openai_chat" | "openai_responses" | "gemini_native" | "bedrock_native"
         )
     }
 
@@ -725,12 +729,19 @@ impl ProviderAdapter for ClaudeAdapter {
         // Heuristic: detect response format by presence of top-level fields.
         // The ProviderAdapter trait's transform_response doesn't receive the Provider
         // config, so we can't check api_format here. Instead we rely on the fact that
-        // Responses API always returns "output" while Chat Completions returns "choices".
-        // This is safe because the two formats are structurally disjoint.
+        // each response format has distinct top-level fields.
         if body.get("candidates").is_some() || body.get("promptFeedback").is_some() {
             super::transform_gemini::gemini_to_anthropic(body)
         } else if body.get("output").is_some() {
-            super::transform_responses::responses_to_anthropic(body)
+            // Check if it's a Bedrock response (has "output" with possible "message")
+            if body.get("output").and_then(|o| o.get("message")).is_some() {
+                super::transform_bedrock::bedrock_to_anthropic(body)
+            } else {
+                super::transform_responses::responses_to_anthropic(body)
+            }
+        } else if body.get("stopReason").is_some() || body.get("usage").is_some() {
+            // Bedrock also has stopReason and usage fields
+            super::transform_bedrock::bedrock_to_anthropic(body)
         } else {
             super::transform::openai_to_anthropic(body)
         }
