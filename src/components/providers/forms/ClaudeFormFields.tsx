@@ -689,51 +689,49 @@ export function ClaudeFormFields({
             </p>
           )}
           <CollapsibleContent className="space-y-4 pt-2">
-            {/* API 格式选择（仅非云服务商显示） */}
-            {category !== "cloud_provider" && (
-              <div className="space-y-2">
-                <FormLabel htmlFor="apiFormat">
-                  {t("providerForm.apiFormat", { defaultValue: "API 格式" })}
-                </FormLabel>
-                <Select value={apiFormat} onValueChange={onApiFormatChange}>
-                  <SelectTrigger id="apiFormat" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="anthropic">
-                      {t("providerForm.apiFormatAnthropic", {
-                        defaultValue: "Anthropic Messages (原生)",
-                      })}
-                    </SelectItem>
-                    <SelectItem value="openai_chat">
-                      {t("providerForm.apiFormatOpenAIChat", {
-                        defaultValue: "OpenAI Chat Completions (需转换)",
-                      })}
-                    </SelectItem>
-                    <SelectItem value="openai_responses">
-                      {t("providerForm.apiFormatOpenAIResponses", {
-                        defaultValue: "OpenAI Responses API (需转换)",
-                      })}
-                    </SelectItem>
-                    <SelectItem value="gemini_native">
-                      {t("providerForm.apiFormatGeminiNative", {
-                        defaultValue: "Gemini Native generateContent (需转换)",
-                      })}
-                    </SelectItem>
-                    <SelectItem value="amazon_bedrock">
-                      {t("providerForm.apiFormatAmazonBedrock", {
-                        defaultValue: "Amazon Bedrock Converse API (需转换)",
-                      })}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  {t("providerForm.apiFormatHint", {
-                    defaultValue: "选择供应商 API 的输入格式",
-                  })}
-                </p>
-              </div>
-            )}
+            {/* API 格式选择 */}
+            <div className="space-y-2">
+              <FormLabel htmlFor="apiFormat">
+                {t("providerForm.apiFormat", { defaultValue: "API 格式" })}
+              </FormLabel>
+              <Select value={apiFormat} onValueChange={onApiFormatChange}>
+                <SelectTrigger id="apiFormat" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="anthropic">
+                    {t("providerForm.apiFormatAnthropic", {
+                      defaultValue: "Anthropic Messages (原生)",
+                    })}
+                  </SelectItem>
+                  <SelectItem value="openai_chat">
+                    {t("providerForm.apiFormatOpenAIChat", {
+                      defaultValue: "OpenAI Chat Completions (需转换)",
+                    })}
+                  </SelectItem>
+                  <SelectItem value="openai_responses">
+                    {t("providerForm.apiFormatOpenAIResponses", {
+                      defaultValue: "OpenAI Responses API (需转换)",
+                    })}
+                  </SelectItem>
+                  <SelectItem value="gemini_native">
+                    {t("providerForm.apiFormatGeminiNative", {
+                      defaultValue: "Gemini Native generateContent (需转换)",
+                    })}
+                  </SelectItem>
+                  <SelectItem value="amazon_bedrock">
+                    {t("providerForm.apiFormatAmazonBedrock", {
+                      defaultValue: "Amazon Bedrock Converse API (需转换)",
+                    })}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {t("providerForm.apiFormatHint", {
+                  defaultValue: "选择供应商 API 的输入格式",
+                })}
+              </p>
+            </div>
 
             {/* 认证字段选择器 */}
             <div className="space-y-2">

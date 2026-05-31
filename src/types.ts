@@ -202,11 +202,13 @@ export interface ProviderMeta {
   // - "openai_chat": OpenAI Chat Completions 格式，需要格式转换
   // - "openai_responses": OpenAI Responses API 格式，需要格式转换
   // - "gemini_native": Gemini Native generateContent API 格式，需要格式转换
+  // - "amazon_bedrock": Amazon Bedrock Converse API 格式，需要格式转换
   apiFormat?:
     | "anthropic"
     | "openai_chat"
     | "openai_responses"
-    | "gemini_native";
+    | "gemini_native"
+    | "amazon_bedrock";
   // 通用认证绑定
   authBinding?: AuthBinding;
   // Claude 认证字段名
