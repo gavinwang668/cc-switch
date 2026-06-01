@@ -33,6 +33,7 @@ mod settings;
 mod store;
 
 mod tray;
+mod usage_events;
 mod usage_script;
 
 pub use app_config::{AppType, InstalledSkill, McpApps, McpServer, MultiAppConfig, SkillApps};
@@ -335,6 +336,11 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // 注入 AppHandle 给 usage_events，让无 AppHandle 持有的写日志路径
+            // 也能向前端推送 `usage-log-recorded`。
+            // 放在日志系统初始化之后，确保 init 的日志能正常输出。
+            usage_events::init(app.handle().clone());
 
             // 初始化数据库
             let app_config_dir = crate::config::get_app_config_dir();
@@ -1099,6 +1105,7 @@ pub fn run() {
             commands::get_claude_desktop_status,
             commands::get_claude_desktop_default_routes,
             commands::import_claude_desktop_providers_from_claude,
+            commands::ensure_claude_desktop_official_provider,
             commands::get_claude_config_status,
             commands::get_config_status,
             commands::get_claude_code_config_path,
