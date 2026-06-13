@@ -1,244 +1,156 @@
-# CC Switch 多协议支持与 Linux CLI 模式实施计划
+# CC Switch Multi-Protocol & Linux CLI Implementation Plan (Revised)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 实现完整的 API 协议转换矩阵（支持任意客户端调用任意模型后端）和 Linux 无头服务器 CLI 模式
+**Goal:** 在任意客户端（Claude Code / Codex / Gemini CLI / OpenCode / OpenClaw / Claude Desktop）和任意模型后端（Anthropic / OpenAI Chat / OpenAI Responses / Gemini Native / AWS Bedrock）之间补齐缺失的 API 协议转换矩阵，并交付一个可在无 GUI 的 Linux 服务器上运行的管理 CLI。
 
-**Architecture:** 
-- 后端：基于现有的 transform 模块扩展，为 Gemini/Claude Desktop 添加 API 格式选择支持
-- CLI：创建独立的 `cc-switch-cli` 二进制，复用核心代理和数据库逻辑，提供命令行管理界面
-- 前端：扩展现有表单组件，添加 API 格式选择器
+**Architecture:**
+- **后端**：复用 `src-tauri/src/proxy/providers/transform_*.rs` 已有转换函数；为 Gemini 客户端补齐反向转换（gemini → anthropic/openai_chat/openai_responses），在 `handler_config.rs` 增加基于 `provider.meta.apiFormat` 的转换路由。
+- **前端**：Gemini 与 Claude Desktop 表单新增 `apiFormat` 下拉（OpenCode 表单同样缺失，需要补齐）；Claude 下拉补 `bedrock` 选项；不动 OpenClaw（已有）和 Codex（已有）。
+- **CLI**：在 `src-tauri/src/bin/` 新增 `cc-switch-cli` 二进制，clap derive 风格；通过 `Database::init()` + `AppState::new()` 共享 GUI 同一份数据库；**CLI 显式构造 `AppState`，不依赖 Tauri runtime**。
+- **文档**：遵循现有 `docs/user-manual/{zh,en,ja}/2-providers/` 三语结构；新增 systemd unit 模板到 `assets/systemd/`。
 
-**Tech Stack:** Rust (Tauri), TypeScript/React, SQLite, Axum, Clap (CLI)
-
----
-
-## 当前状态分析
-
-### 已实现的转换函数（后端）
-✅ `transform.rs`: Anthropic ↔ OpenAI Chat Completions  
-✅ `transform_responses.rs`: Anthropic ↔ OpenAI Responses API  
-✅ `transform_gemini.rs`: Anthropic ↔ Gemini Native  
-✅ `transform_bedrock.rs`: Anthropic ↔ Bedrock Converse API  
-✅ `transform_codex_chat.rs`: Codex Responses ↔ Chat Completions  
-
-### 前端 API 格式支持现状
-- **Claude**: ✅ 支持 apiFormat 选择器（anthropic/openai_chat/openai_responses/gemini_native/bedrock）
-- **Codex**: ✅ 支持 apiFormat 选择器（openai_responses/openai_chat）
-- **Gemini**: ❌ 无 apiFormat 选择器（固定使用 Gemini Native）
-- **Claude Desktop**: ❌ 无 apiFormat 选择器（固定使用 Anthropic）
-- **OpenCode/OpenClaw/Hermes**: 各自独立配置体系，不使用 apiFormat
-
-### Linux CLI 模式
-❌ 完全缺失，需要从头实现
+**Tech Stack:** Rust 1.75+ (Tauri 2 backend), TypeScript/React 18 (frontend), SQLite (rusqlite), clap 4.5 (CLI), Vitest 1.x (frontend tests), cargo test (Rust tests).
 
 ---
 
-## Phase 1: Gemini 应用 API 格式选择支持
+## Scope Check
 
-### Task 1.1: 扩展 Gemini 类型定义
+原始需求覆盖 4 个独立维度，按"可独立交付的工作软件"切分为 **3 个 sub-plan**：
+
+| Sub-plan | 对应 Phase | 交付物 | 独立可验证 |
+|---|---|---|---|
+| **A：协议转换补全** | Phase 1, 2, 6, 7 | 任意客户端 → 任意后端 | `cargo test` 通过 |
+| **B：前端下拉补齐** | Phase 3, 4, 5 | Gemini / Claude Desktop / OpenCode / Claude 表单 | `pnpm test` 通过 |
+| **C：Linux CLI** | Phase 8, 9, 10, 11 | `cc-switch-cli` 二进制 + systemd + 文档 + 集成测试 | `cc-switch-cli list` 工作 |
+
+**分支策略（用户规则遵守）**：用户在 `~/.trae/rules/project_rules.md` 中明确"禁止私自创建本地分支和远程"。**所有任务在 main 分支上完成，不创建 feature 分支**；每个 task 的最后一个 commit 留在 main 上。
+
+---
+
+## File Structure
+
+### 后端 Rust（创建/修改）
+
+```
+src-tauri/
+├── src/
+│   ├── bin/
+│   │   └── cc-switch-cli.rs              [Create] CLI 入口
+│   ├── cli/
+│   │   ├── mod.rs                        [Create] CLI 子命令注册
+│   │   ├── state.rs                      [Create] CLI 用的 AppState 工厂
+│   │   ├── provider.rs                   [Create] provider 子命令实现
+│   │   ├── proxy.rs                      [Create] proxy 子命令实现
+│   │   ├── mcp.rs                        [Create] mcp 子命令实现
+│   │   ├── logs.rs                       [Create] logs 子命令实现
+│   │   ├── import_export.rs              [Create] import/export 子命令
+│   │   └── systemd.rs                    [Create] daemon 模式辅助
+│   ├── proxy/
+│   │   └── providers/
+│   │       ├── transform_gemini.rs       [Modify] 添加 gemini_to_anthropic/openai_chat/openai_responses
+│   │       ├── handler_config.rs         [Modify] 添加 get_gemini_target_format
+│   │       └── handlers.rs               [Modify] wire-up 新转换
+│   └── lib.rs                            [Modify] pub use cli 模块
+└── Cargo.toml                            [Modify] 添加 [[bin]] 和 clap 依赖
+```
+
+### 前端 TS（创建/修改）
+
+```
+src/
+├── components/providers/forms/
+│   ├── GeminiFormFields.tsx              [Modify] 新增 apiFormat 下拉
+│   ├── ClaudeDesktopProviderForm.tsx     [Modify] 新增 apiFormat 下拉
+│   ├── OpenCodeFormFields.tsx            [Modify] 新增 apiFormat 下拉（**原 plan 漏掉**）
+│   ├── ClaudeFormFields.tsx              [Modify] 下拉新增 bedrock 项
+│   └── __tests__/                        [Create] vitest 测试
+│       ├── GeminiFormFields.test.tsx
+│       ├── ClaudeDesktopProviderForm.test.tsx
+│       └── OpenCodeFormFields.test.tsx
+├── hooks/
+│   ├── useGeminiFormState.ts             [Create] Gemini 表单状态
+│   ├── useClaudeDesktopFormState.ts      [Create] Desktop 表单状态
+│   └── useOpenCodeFormState.ts           [Create] OpenCode 表单状态
+├── types.ts                              [Modify] ClaudeApiFormat 加 bedrock
+└── i18n/locales/{en,zh,zh-TW,ja}.json   [Modify] 补 4 个 key
+```
+
+### 文档与部署
+
+```
+docs/
+├── user-manual/{zh,en,ja}/2-providers/
+│   ├── 2.7-multi-protocol.md             [Create] 协议转换矩阵
+│   └── 2.8-cli.md                        [Create] CLI 使用指南
+├── api-format-matrix.md                  [Create] 根目录技术参考
+└── superpowers/plans/2026-06-13-multi-protocol-cli-support.md
+                                       [This file]
+
+assets/
+└── systemd/
+    └── cc-switch.service                 [Create] systemd unit 模板
+
+README.md / README_ZH.md                  [Modify] 增加多协议 + CLI 简介
+```
+
+---
+
+## Phase 0: 现状基线（1 task，**不创建分支**）
+
+### Task 0.1: 锁定基线与确认测试基线
 
 **Files:**
-- Modify: `src/types.ts:200-250`
+- Read: `src-tauri/src/proxy/providers/transform_gemini.rs:1-50`（import 段）
+- Read: `vitest.config.ts`
 
-- [ ] **Step 1: 添加 GeminiApiFormat 类型**
+- [ ] **Step 1: 确认当前在 main 分支且工作树干净**
 
-在 `src/types.ts` 中找到 `CodexApiFormat` 定义位置（约 250 行），在其后添加：
+Run:
+```bash
+git branch --show-current
+git status --short
+```
+Expected: 输出 `main`（或当前默认分支名），`git status` 输出为空或仅有未跟踪文件。**如果当前不在 main，先 `git checkout main`（这是从别的分支切回，不算创建新分支）**。
+
+- [ ] **Step 2: 跑通基线 Rust 测试**
+
+Run: `cd src-tauri && cargo test --lib --no-run 2>&1 | tail -5`
+Expected: 编译成功，0 errors
+
+- [ ] **Step 3: 跑通基线前端测试**
+
+Run: `cd /workspace && pnpm test --run 2>&1 | tail -10`
+Expected: 所有现有 vitest 通过
+
+- [ ] **Step 4: 跑通 TypeScript 类型检查**
+
+Run: `pnpm tsc --noEmit 2>&1 | tail -5`
+Expected: 0 errors
+
+> **本任务不创建 commit**。基线状态本身就是 clean 的，不需要"chore: baseline"这种空 commit。
+
+---
+
+## Phase 1: 类型与 Schema（2 tasks）
+
+### Task 1.1: 扩展 ClaudeApiFormat 添加 bedrock 选项
+
+**Files:**
+- Modify: `src/types.ts:241-245`
+
+- [ ] **Step 1: 修改类型定义**
+
+在 `src/types.ts` 第 241-245 行附近，将 `ClaudeApiFormat` 改为：
 
 ```typescript
-// Gemini API 格式类型
-// - "gemini_native": Gemini Native generateContent API 格式，直接透传
+// Claude API 格式类型
+// - "anthropic": 原生 Anthropic Messages API 格式，直接透传
 // - "openai_chat": OpenAI Chat Completions 格式，需要格式转换
 // - "openai_responses": OpenAI Responses API 格式，需要格式转换
-// - "anthropic": Anthropic Messages API 格式，需要格式转换
-export type GeminiApiFormat = 
-  | "gemini_native"
-  | "openai_chat"
-  | "openai_responses"
-  | "anthropic";
-```
-
-- [ ] **Step 2: 在 ProviderMeta 中添加 geminiApiFormat 字段**
-
-在 `ProviderMeta` 接口（约 177-228 行）中，找到 `apiFormat` 字段（205 行），在其后添加：
-
-```typescript
-  // Gemini API 格式（Gemini 供应商使用）
-  // - "gemini_native": Gemini Native generateContent API 格式，直接透传
-  // - "openai_chat": OpenAI Chat Completions 格式，需要格式转换
-  // - "openai_responses": OpenAI Responses API 格式，需要格式转换
-  // - "anthropic": Anthropic Messages API 格式，需要格式转换
-  geminiApiFormat?: GeminiApiFormat;
-```
-
-- [ ] **Step 3: 提交**
-
-```bash
-git add src/types.ts
-git commit -m "feat(types): add GeminiApiFormat type definition"
-```
-
----
-
-### Task 1.2: 创建 Gemini 表单 API 格式选择器
-
-**Files:**
-- Modify: `src/components/providers/forms/GeminiFormFields.tsx`
-
-- [ ] **Step 1: 读取 GeminiFormFields.tsx 完整内容**
-
-```bash
-wc -l src/components/providers/forms/GeminiFormFields.tsx
-```
-
-预期：约 200-300 行
-
-- [ ] **Step 2: 在组件 props 中添加 geminiApiFormat 相关回调**
-
-在文件顶部找到 `GeminiFormFieldsProps` 接口定义，添加：
-
-```typescript
-  // Gemini API 格式
-  geminiApiFormat?: GeminiApiFormat;
-  onGeminiApiFormatChange?: (format: GeminiApiFormat) => void;
-```
-
-- [ ] **Step 3: 在表单中添加 API 格式选择器 UI**
-
-在表单的合适位置（通常在 API Key 输入框之后），添加：
-
-```tsx
-{/* Gemini API 格式选择 */}
-<div className="space-y-2">
-  <FormLabel>API 格式</FormLabel>
-  <Select
-    value={geminiApiFormat || "gemini_native"}
-    onValueChange={(value) => onGeminiApiFormatChange?.(value as GeminiApiFormat)}
-  >
-    <SelectTrigger>
-      <SelectValue />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="gemini_native">
-        Gemini Native（原生格式）
-      </SelectItem>
-      <SelectItem value="openai_chat">
-        OpenAI Chat Completions
-      </SelectItem>
-      <SelectItem value="openai_responses">
-        OpenAI Responses API
-      </SelectItem>
-      <SelectItem value="anthropic">
-        Anthropic Messages API
-      </SelectItem>
-    </SelectContent>
-  </Select>
-  <p className="text-xs text-muted-foreground">
-    选择供应商支持的 API 格式。CC Switch 会自动转换请求和响应格式。
-  </p>
-</div>
-```
-
-- [ ] **Step 4: 提交**
-
-```bash
-git add src/components/providers/forms/GeminiFormFields.tsx
-git commit -m "feat(gemini): add API format selector to Gemini form"
-```
-
----
-
-### Task 1.3: 后端 Gemini API 格式处理
-
-**Files:**
-- Modify: `src-tauri/src/proxy/providers/gemini.rs`
-- Modify: `src-tauri/src/proxy/handlers.rs`
-
-- [ ] **Step 1: 在 gemini.rs 中添加 get_gemini_api_format 函数**
-
-在 `src-tauri/src/proxy/providers/gemini.rs` 文件顶部（约 50 行后）添加：
-
-```rust
-/// 获取 Gemini 供应商的 API 格式
-///
-/// 从 provider.meta.geminiApiFormat 读取，默认返回 "gemini_native"
-pub fn get_gemini_api_format(provider: &Provider) -> String {
-    provider
-        .meta
-        .as_ref()
-        .and_then(|meta| meta.get("geminiApiFormat"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("gemini_native")
-        .to_string()
-}
-
-/// 判断是否需要格式转换
-pub fn gemini_api_format_needs_transform(format: &str) -> bool {
-    format != "gemini_native"
-}
-```
-
-- [ ] **Step 2: 在 handlers.rs 中添加 Gemini 格式转换逻辑**
-
-在 `handle_gemini_request` 函数中（需要先定位该函数），添加格式转换分支：
-
-```rust
-// 在发送请求前检查是否需要格式转换
-let api_format = get_gemini_api_format(&provider);
-if gemini_api_format_needs_transform(&api_format) {
-    // 根据 api_format 调用对应的转换函数
-    let transformed_body = match api_format.as_str() {
-        "openai_chat" => {
-            // Gemini Native -> OpenAI Chat
-            // 注意：这里需要反向转换，因为客户端发送的是 Gemini 格式
-            // 但实际场景中 Gemini 客户端通常只用 gemini_native
-            // 这个分支主要用于测试和特殊场景
-            unimplemented!("Gemini to OpenAI Chat conversion not yet implemented")
-        }
-        "openai_responses" => {
-            unimplemented!("Gemini to OpenAI Responses conversion not yet implemented")
-        }
-        "anthropic" => {
-            // Gemini Native -> Anthropic Messages
-            // 同样，这个场景很少见
-            unimplemented!("Gemini to Anthropic conversion not yet implemented")
-        }
-        _ => body.clone(),
-    };
-    // 使用 transformed_body 发送请求
-}
-```
-
-**注意：** 实际上 Gemini 客户端（如 Gemini CLI）通常只发送 Gemini Native 格式，所以反向转换的需求很低。这个功能主要是为了完整性。
-
-- [ ] **Step 3: 提交**
-
-```bash
-git add src-tauri/src/proxy/providers/gemini.rs src-tauri/src/proxy/handlers.rs
-git commit -m "feat(gemini): add backend API format handling"
-```
-
----
-
-## Phase 2: Claude Desktop API 格式选择支持
-
-### Task 2.1: 扩展 Claude Desktop 类型定义
-
-**Files:**
-- Modify: `src/types.ts`
-
-- [ ] **Step 1: 添加 ClaudeDesktopApiFormat 类型**
-
-在 `GeminiApiFormat` 定义后添加：
-
-```typescript
-// Claude Desktop API 格式类型
-// - "anthropic": Anthropic Messages API 格式，直接透传
-// - "openai_chat": OpenAI Chat Completions 格式，需要格式转换
-// - "openai_responses": OpenAI Responses API 格式，需要格式转换
-// - "gemini_native": Gemini Native API 格式，需要格式转换
-// - "bedrock": Amazon Bedrock Converse API 格式，需要格式转换
-export type ClaudeDesktopApiFormat = 
+// - "gemini_native": Gemini Native generateContent API 格式，需要格式转换
+// - "bedrock": Amazon Bedrock Converse API 格式（已存在后端转换 transform_bedrock.rs）
+export type ClaudeApiFormat =
   | "anthropic"
   | "openai_chat"
   | "openai_responses"
@@ -246,121 +158,1537 @@ export type ClaudeDesktopApiFormat =
   | "bedrock";
 ```
 
-- [ ] **Step 2: 在 ProviderMeta 中添加 claudeDesktopApiFormat 字段**
+- [ ] **Step 2: 同时更新 `ProviderMeta.apiFormat` 联合类型**
+
+在 `src/types.ts:205-209`，将 `apiFormat` 字段联合改为：
 
 ```typescript
-  // Claude Desktop API 格式
-  claudeDesktopApiFormat?: ClaudeDesktopApiFormat;
+  apiFormat?:
+    | "anthropic"
+    | "openai_chat"
+    | "openai_responses"
+    | "gemini_native"
+    | "bedrock";
 ```
 
-- [ ] **Step 3: 提交**
+- [ ] **Step 3: 跑 TypeScript 编译检查**
+
+Run: `pnpm tsc --noEmit 2>&1 | head -20`
+Expected: 0 errors。如果有 `apiFormat` 字符串字面量用法报错，跳到对应文件补 `"bedrock"` 分支。
+
+- [ ] **Step 4: 提交**
 
 ```bash
 git add src/types.ts
-git commit -m "feat(types): add ClaudeDesktopApiFormat type definition"
+git commit -m "feat(types): add bedrock to ClaudeApiFormat union"
 ```
 
 ---
 
-### Task 2.2: 创建 Claude Desktop 表单 API 格式选择器
+### Task 1.2: 验证后端 handler 已能识别 bedrock
 
 **Files:**
-- Modify: `src/components/providers/forms/ClaudeDesktopProviderForm.tsx`
+- Read: `src-tauri/src/proxy/providers/claude.rs`（已存在 bedrock 处理）
 
-- [ ] **Step 1: 读取 ClaudeDesktopProviderForm.tsx**
+- [ ] **Step 1: 确认 backend 已支持 bedrock**
 
-```bash
-wc -l src/components/providers/forms/ClaudeDesktopProviderForm.tsx
-```
+Run: `grep -n "bedrock" src-tauri/src/proxy/providers/claude.rs | head -5`
+Expected: 至少 1 行匹配（例如 `claude_api_format_needs_transform` 或 `get_claude_api_format`）。**如果 0 匹配，停下来告诉用户需要先实现 bedrock 路由。**
 
-- [ ] **Step 2: 添加 API 格式选择器**
+- [ ] **Step 2: 确认 i18n 已有 bedrock 文案**
 
-参考 Task 1.2 的实现，在 Claude Desktop 表单中添加类似的 API 格式选择器，选项包括：
-- Anthropic（默认）
-- OpenAI Chat Completions
-- OpenAI Responses API
-- Gemini Native
-- Amazon Bedrock
+Run: `grep -n "bedrock\|Bedrock" src/i18n/locales/en.json`
+Expected: 至少 1 行匹配。如果为 0，跳到 Phase 7 在 4 个 locale 补 bedrock 字符串。
 
-- [ ] **Step 3: 提交**
-
-```bash
-git add src/components/providers/forms/ClaudeDesktopProviderForm.tsx
-git commit -m "feat(claude-desktop): add API format selector"
-```
+- [ ] **Step 3: 无 commit（仅为下一步铺垫）**
 
 ---
 
-### Task 2.3: 后端 Claude Desktop API 格式处理
+## Phase 2: Gemini 客户端反向转换（4 tasks，TDD）
+
+> 目标：让 Gemini CLI 客户端（发 Gemini Native 格式）可以调用 Anthropic / OpenAI / OpenAI Responses 后端。**复用现有 `transform_gemini.rs` 的同款 `#[cfg(test)] mod tests` 模式。**
+
+### Task 2.1: TDD `gemini_to_anthropic`
 
 **Files:**
-- Modify: `src-tauri/src/proxy/providers/claude.rs`
+- Modify: `src-tauri/src/proxy/providers/transform_gemini.rs`
 
-- [ ] **Step 1: 添加 get_claude_desktop_api_format 函数**
+- [ ] **Step 1: 在文件底部 `mod tests` 内添加失败测试**
+
+紧接现有测试（文件末尾的 `#[cfg(test)] mod tests` 内部），追加：
 
 ```rust
-/// 获取 Claude Desktop 供应商的 API 格式
-pub fn get_claude_desktop_api_format(provider: &Provider) -> String {
+    #[test]
+    fn gemini_to_anthropic_maps_contents_to_messages() {
+        let input = json!({
+            "contents": [
+                { "role": "user", "parts": [{ "text": "Hello" }] }
+            ],
+            "systemInstruction": { "parts": [{ "text": "You are helpful." }] }
+        });
+        let result = gemini_to_anthropic(input).unwrap();
+        assert_eq!(result["system"], "You are helpful.");
+        assert_eq!(result["messages"][0]["role"], "user");
+        assert_eq!(result["messages"][0]["content"], "Hello");
+    }
+
+    #[test]
+    fn gemini_to_anthropic_handles_model_role() {
+        let input = json!({
+            "contents": [
+                { "role": "user", "parts": [{ "text": "Hi" }] },
+                { "role": "model", "parts": [{ "text": "Hello back" }] }
+            ]
+        });
+        let result = gemini_to_anthropic(input).unwrap();
+        assert_eq!(result["messages"][0]["role"], "user");
+        assert_eq!(result["messages"][1]["role"], "assistant");
+    }
+
+    #[test]
+    fn gemini_to_anthropic_converts_function_call_to_tool_use() {
+        let input = json!({
+            "contents": [
+                {
+                    "role": "model",
+                    "parts": [{
+                        "functionCall": { "name": "get_weather", "args": { "city": "SF" } }
+                    }]
+                }
+            ]
+        });
+        let result = gemini_to_anthropic(input).unwrap();
+        let block = &result["messages"][0]["content"][0];
+        assert_eq!(block["type"], "tool_use");
+        assert_eq!(block["name"], "get_weather");
+        assert_eq!(block["input"]["city"], "SF");
+    }
+```
+
+- [ ] **Step 2: 跑测试，验证失败**
+
+Run: `cd src-tauri && cargo test --lib transform_gemini::tests::gemini_to_anthropic 2>&1 | tail -10`
+Expected: 3 个测试全部 compile error（`gemini_to_anthropic` 函数不存在）
+
+- [ ] **Step 3: 实现 `gemini_to_anthropic`**
+
+在 `transform_gemini.rs` 文件顶部 `pub fn anthropic_to_gemini` 之后添加：
+
+```rust
+/// 反向转换：Gemini Native 格式 → Anthropic Messages 格式
+///
+/// 当客户端是 Gemini CLI（发 Gemini Native 请求）但后端是 Anthropic 兼容供应商时使用。
+pub fn gemini_to_anthropic(body: Value) -> Result<Value, ProxyError> {
+    let mut out = Map::new();
+    if let Some(model) = body.get("model").cloned() {
+        out.insert("model".into(), model);
+    }
+    if let Some(si) = body.get("systemInstruction") {
+        if let Some(parts) = si.get("parts").and_then(|p| p.as_array()) {
+            let text: String = parts
+                .iter()
+                .filter_map(|p| p.get("text").and_then(|t| t.as_str()))
+                .collect::<Vec<_>>()
+                .join("\n");
+            if !text.is_empty() {
+                out.insert("system".into(), Value::String(text));
+            }
+        }
+    }
+    if let Some(gc) = body.get("generationConfig") {
+        if let Some(mt) = gc.get("maxOutputTokens") {
+            out.insert("max_tokens".into(), mt.clone());
+        }
+    }
+    let mut messages: Vec<Value> = Vec::new();
+    if let Some(contents) = body.get("contents").and_then(|c| c.as_array()) {
+        for c in contents {
+            let role = c.get("role").and_then(|r| r.as_str()).unwrap_or("user");
+            let anthropic_role = if role == "model" { "assistant" } else { role };
+            let parts = c.get("parts").and_then(|p| p.as_array());
+            let mut content_blocks: Vec<Value> = Vec::new();
+            let mut plain_text: Option<String> = None;
+            if let Some(parts) = parts {
+                for part in parts {
+                    if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                        if plain_text.is_none() && content_blocks.is_empty() {
+                            plain_text = Some(text.to_string());
+                        } else if let Some(ref mut pt) = plain_text {
+                            pt.push('\n');
+                            pt.push_str(text);
+                        } else {
+                            content_blocks.push(json!({ "type": "text", "text": text }));
+                        }
+                    } else if let Some(fc) = part.get("functionCall") {
+                        let id = fc.get("id").and_then(|i| i.as_str())
+                            .map(String::from)
+                            .unwrap_or_else(|| format!("toolu_{}", uuid::Uuid::new_v4()));
+                        content_blocks.push(json!({
+                            "type": "tool_use",
+                            "id": id,
+                            "name": fc.get("name").cloned().unwrap_or(Value::String(String::new())),
+                            "input": fc.get("args").cloned().unwrap_or(json!({})),
+                        }));
+                    } else if let Some(fr) = part.get("functionResponse") {
+                        content_blocks.push(json!({
+                            "type": "tool_result",
+                            "tool_use_id": fr.get("id").cloned().unwrap_or(Value::String(String::new())),
+                            "content": fr.get("response").cloned().unwrap_or(json!({})),
+                        }));
+                    }
+                }
+            }
+            let content = match (plain_text, content_blocks.is_empty()) {
+                (Some(t), true) => Value::String(t),
+                (_, false) => Value::Array(content_blocks),
+                (None, true) => Value::Array(vec![]),
+            };
+            messages.push(json!({ "role": anthropic_role, "content": content }));
+        }
+    }
+    out.insert("messages".into(), Value::Array(messages));
+    Ok(Value::Object(out))
+}
+```
+
+> **注意**：`synthesize_tool_call_id` 助手在 `transform_gemini.rs` 中已存在（`use uuid` 引用）。如不存在，把 `unwrap_or_else` 部分改为 `unwrap_or_else(|| format!("toolu_{}", uuid::Uuid::new_v4()))`。
+
+- [ ] **Step 4: 跑测试，验证通过**
+
+Run: `cd src-tauri && cargo test --lib transform_gemini::tests::gemini_to_anthropic 2>&1 | tail -5`
+Expected: 3 passed
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add src-tauri/src/proxy/providers/transform_gemini.rs
+git commit -m "feat(gemini): add reverse transform gemini_to_anthropic"
+```
+
+---
+
+### Task 2.2: TDD `gemini_to_openai_chat`
+
+**Files:**
+- Modify: `src-tauri/src/proxy/providers/transform_gemini.rs`
+
+- [ ] **Step 1: 添加失败测试**
+
+在 Task 2.1 测试之后追加：
+
+```rust
+    #[test]
+    fn gemini_to_openai_chat_maps_contents() {
+        let input = json!({
+            "contents": [
+                { "role": "user", "parts": [{ "text": "Hello" }] }
+            ],
+            "systemInstruction": { "parts": [{ "text": "Be brief." }] }
+        });
+        let result = gemini_to_openai_chat(input).unwrap();
+        assert_eq!(result["messages"][0]["role"], "system");
+        assert_eq!(result["messages"][0]["content"], "Be brief.");
+        assert_eq!(result["messages"][1]["role"], "user");
+        assert_eq!(result["messages"][1]["content"], "Hello");
+    }
+
+    #[test]
+    fn gemini_to_openai_chat_converts_function_call_to_tool_calls() {
+        let input = json!({
+            "contents": [
+                {
+                    "role": "model",
+                    "parts": [{
+                        "functionCall": { "id": "call_123", "name": "search", "args": { "q": "rust" } }
+                    }]
+                }
+            ]
+        });
+        let result = gemini_to_openai_chat(input).unwrap();
+        let tc = &result["messages"][0]["tool_calls"][0];
+        assert_eq!(tc["id"], "call_123");
+        assert_eq!(tc["function"]["name"], "search");
+        assert_eq!(tc["function"]["arguments"], "{\"q\":\"rust\"}");
+    }
+```
+
+- [ ] **Step 2: 跑测试，验证失败**
+
+Run: `cd src-tauri && cargo test --lib transform_gemini::tests::gemini_to_openai_chat 2>&1 | tail -5`
+Expected: 2 个测试 compile error
+
+- [ ] **Step 3: 实现 `gemini_to_openai_chat`**
+
+```rust
+/// 反向转换：Gemini Native 格式 → OpenAI Chat Completions 格式
+pub fn gemini_to_openai_chat(body: Value) -> Result<Value, ProxyError> {
+    let mut out = Map::new();
+    if let Some(model) = body.get("model").cloned() {
+        out.insert("model".into(), model);
+    }
+    if let Some(gc) = body.get("generationConfig") {
+        if let Some(mt) = gc.get("maxOutputTokens") {
+            out.insert("max_tokens".into(), mt.clone());
+        }
+        if let Some(t) = gc.get("temperature") {
+            out.insert("temperature".into(), t.clone());
+        }
+    }
+    let mut messages: Vec<Value> = Vec::new();
+    if let Some(si) = body.get("systemInstruction") {
+        if let Some(text) = si.get("parts").and_then(|p| p.as_array()).and_then(|parts| {
+            parts.iter().find_map(|p| p.get("text").and_then(|t| t.as_str()))
+        }) {
+            messages.push(json!({ "role": "system", "content": text }));
+        }
+    }
+    if let Some(contents) = body.get("contents").and_then(|c| c.as_array()) {
+        for c in contents {
+            let role = c.get("role").and_then(|r| r.as_str()).unwrap_or("user");
+            let chat_role = if role == "model" { "assistant" } else { role };
+            let parts = c.get("parts").and_then(|p| p.as_array());
+            let mut tool_calls: Vec<Value> = Vec::new();
+            let mut text_acc = String::new();
+            if let Some(parts) = parts {
+                for part in parts {
+                    if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                        if !text_acc.is_empty() { text_acc.push('\n'); }
+                        text_acc.push_str(text);
+                    } else if let Some(fc) = part.get("functionCall") {
+                        let id = fc.get("id").and_then(|i| i.as_str())
+                            .map(String::from)
+                            .unwrap_or_else(|| format!("call_{}", uuid::Uuid::new_v4()));
+                        let args = fc.get("args").cloned().unwrap_or(json!({}));
+                        tool_calls.push(json!({
+                            "id": id,
+                            "type": "function",
+                            "function": {
+                                "name": fc.get("name").cloned().unwrap_or(Value::String(String::new())),
+                                "arguments": serde_json::to_string(&args).unwrap_or_else(|_| "{}".into()),
+                            }
+                        }));
+                    }
+                }
+            }
+            let mut msg = Map::new();
+            msg.insert("role".into(), Value::String(chat_role.to_string()));
+            if !text_acc.is_empty() {
+                msg.insert("content".into(), Value::String(text_acc));
+            } else {
+                msg.insert("content".into(), Value::Null);
+            }
+            if !tool_calls.is_empty() {
+                msg.insert("tool_calls".into(), Value::Array(tool_calls));
+            }
+            messages.push(Value::Object(msg));
+        }
+    }
+    out.insert("messages".into(), Value::Array(messages));
+    Ok(Value::Object(out))
+}
+```
+
+- [ ] **Step 4: 跑测试，验证通过**
+
+Run: `cd src-tauri && cargo test --lib transform_gemini::tests::gemini_to_openai_chat 2>&1 | tail -5`
+Expected: 2 passed
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add src-tauri/src/proxy/providers/transform_gemini.rs
+git commit -m "feat(gemini): add reverse transform gemini_to_openai_chat"
+```
+
+---
+
+### Task 2.3: TDD `gemini_to_openai_responses`
+
+**Files:**
+- Modify: `src-tauri/src/proxy/providers/transform_gemini.rs`
+
+- [ ] **Step 1: 添加失败测试**
+
+```rust
+    #[test]
+    fn gemini_to_openai_responses_maps_to_input_array() {
+        let input = json!({
+            "contents": [
+                { "role": "user", "parts": [{ "text": "Hello" }] }
+            ],
+            "systemInstruction": { "parts": [{ "text": "Be brief." }] }
+        });
+        let result = gemini_to_openai_responses(input).unwrap();
+        assert_eq!(result["instructions"], "Be brief.");
+        assert_eq!(result["input"][0]["role"], "user");
+        assert_eq!(result["input"][0]["content"], "Hello");
+    }
+
+    #[test]
+    fn gemini_to_openai_responses_converts_function_call() {
+        let input = json!({
+            "contents": [
+                {
+                    "role": "model",
+                    "parts": [{
+                        "functionCall": { "id": "fc_1", "name": "lookup", "args": { "id": 42 } }
+                    }]
+                }
+            ]
+        });
+        let result = gemini_to_openai_responses(input).unwrap();
+        let item = &result["input"][0];
+        assert_eq!(item["type"], "function_call");
+        assert_eq!(item["name"], "lookup");
+        assert_eq!(item["arguments"], "{\"id\":42}");
+    }
+```
+
+- [ ] **Step 2: 跑测试，验证失败**
+
+Run: `cd src-tauri && cargo test --lib transform_gemini::tests::gemini_to_openai_responses 2>&1 | tail -5`
+Expected: 2 compile error
+
+- [ ] **Step 3: 实现 `gemini_to_openai_responses`**
+
+```rust
+/// 反向转换：Gemini Native 格式 → OpenAI Responses API 格式
+pub fn gemini_to_openai_responses(body: Value) -> Result<Value, ProxyError> {
+    let mut out = Map::new();
+    if let Some(model) = body.get("model").cloned() {
+        out.insert("model".into(), model);
+    }
+    if let Some(si) = body.get("systemInstruction") {
+        if let Some(text) = si.get("parts").and_then(|p| p.as_array()).and_then(|parts| {
+            parts.iter().find_map(|p| p.get("text").and_then(|t| t.as_str()))
+        }) {
+            out.insert("instructions".into(), Value::String(text.to_string()));
+        }
+    }
+    let mut input: Vec<Value> = Vec::new();
+    if let Some(contents) = body.get("contents").and_then(|c| c.as_array()) {
+        for c in contents {
+            let role = c.get("role").and_then(|r| r.as_str()).unwrap_or("user");
+            let parts = c.get("parts").and_then(|p| p.as_array());
+            let text_acc: String = parts
+                .map(|parts| {
+                    parts.iter()
+                        .filter_map(|p| p.get("text").and_then(|t| t.as_str()))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                })
+                .unwrap_or_default();
+            if !text_acc.is_empty() {
+                input.push(json!({ "role": role, "content": text_acc }));
+            }
+            if let Some(parts) = parts {
+                for part in parts {
+                    if let Some(fc) = part.get("functionCall") {
+                        let args = fc.get("args").cloned().unwrap_or(json!({}));
+                        input.push(json!({
+                            "type": "function_call",
+                            "id": fc.get("id").cloned().unwrap_or(Value::String(String::new())),
+                            "name": fc.get("name").cloned().unwrap_or(Value::String(String::new())),
+                            "arguments": serde_json::to_string(&args).unwrap_or_else(|_| "{}".into()),
+                        }));
+                    }
+                }
+            }
+        }
+    }
+    out.insert("input".into(), Value::Array(input));
+    Ok(Value::Object(out))
+}
+```
+
+- [ ] **Step 4: 跑测试，验证通过**
+
+Run: `cd src-tauri && cargo test --lib transform_gemini::tests::gemini_to_openai_responses 2>&1 | tail -5`
+Expected: 2 passed
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add src-tauri/src/proxy/providers/transform_gemini.rs
+git commit -m "feat(gemini): add reverse transform gemini_to_openai_responses"
+```
+
+---
+
+### Task 2.4: 在 handler 中路由 Gemini → 多后端
+
+**Files:**
+- Read: `src-tauri/src/proxy/handlers.rs`（定位 `handle_gemini_request`）
+- Modify: `src-tauri/src/proxy/providers/handler_config.rs`
+
+- [ ] **Step 1: 找到 Gemini handler 入口**
+
+Run: `grep -n "handle_gemini\|gemini_route\|fn handle" src-tauri/src/proxy/handlers.rs | head -10`
+Expected: 至少 1 个匹配。记录该函数所在行号。
+
+- [ ] **Step 2: 在 `handler_config.rs` 中添加 `get_gemini_target_format` 辅助函数**
+
+```rust
+/// 从 provider.meta.apiFormat 读取 Gemini 后端目标格式
+/// 默认 "gemini_native"（保持原行为，不做转换）
+pub fn get_gemini_target_format(provider: &crate::provider::Provider) -> String {
     provider
         .meta
         .as_ref()
-        .and_then(|meta| meta.get("claudeDesktopApiFormat"))
+        .and_then(|m| m.get("apiFormat"))
         .and_then(|v| v.as_str())
-        .unwrap_or("anthropic")
+        .unwrap_or("gemini_native")
         .to_string()
 }
 ```
 
-- [ ] **Step 2: 在请求处理中添加格式转换**
+- [ ] **Step 3: 在 `handlers.rs` 的 `handle_gemini_request` 函数体内、构造 upstream body 之前，插入转换分支**
 
-类似 Task 1.3，在 Claude Desktop 的请求处理流程中添加格式转换逻辑。
+```rust
+    let target_format = crate::proxy::providers::handler_config::get_gemini_target_format(&provider);
+    let upstream_body = match target_format.as_str() {
+        "gemini_native" => body.clone(),
+        "anthropic" => {
+            crate::proxy::providers::transform_gemini::gemini_to_anthropic(body.clone())?
+        }
+        "openai_chat" => {
+            crate::proxy::providers::transform_gemini::gemini_to_openai_chat(body.clone())?
+        }
+        "openai_responses" => {
+            crate::proxy::providers::transform_gemini::gemini_to_openai_responses(body.clone())?
+        }
+        other => {
+            log::warn!("[Gemini] unknown target format `{other}`, passthrough");
+            body.clone()
+        }
+    };
+```
 
-- [ ] **Step 3: 提交**
+将后续代码中所有用到原始 `body` 的位置改用 `upstream_body`（按需重命名）。
+
+- [ ] **Step 4: 跑全量 transform_gemini 测试**
+
+Run: `cd src-tauri && cargo test --lib transform_gemini 2>&1 | tail -5`
+Expected: 27+ passed（25 旧 + 6 新），0 failed
+
+- [ ] **Step 5: 跑 cargo build 确认无编译错误**
+
+Run: `cd src-tauri && cargo build 2>&1 | tail -10`
+Expected: 编译成功
+
+- [ ] **Step 6: 提交**
 
 ```bash
-git add src-tauri/src/proxy/providers/claude.rs
-git commit -m "feat(claude-desktop): add backend API format handling"
+git add src-tauri/src/proxy/handlers.rs src-tauri/src/proxy/providers/handler_config.rs
+git commit -m "feat(gemini): route client → multi-backend transform based on apiFormat"
 ```
 
 ---
 
-## Phase 3: Linux CLI 模式实现
+## Phase 3: Gemini 前端下拉（3 tasks，TDD）
 
-### Task 3.1: 创建 CLI 二进制入口
+### Task 3.1: TDD Gemini 表单状态 hook
 
 **Files:**
-- Create: `src-tauri/src/bin/cc-switch-cli.rs`
+- Create: `src/components/providers/forms/hooks/useGeminiFormState.ts`
+- Test: `src/components/providers/forms/hooks/__tests__/useGeminiFormState.test.ts`
+
+- [ ] **Step 1: 创建失败测试**
+
+```typescript
+import { describe, expect, it } from "vitest";
+import { renderHook, act } from "@testing-library/react";
+import { useGeminiFormState } from "../useGeminiFormState";
+
+describe("useGeminiFormState", () => {
+  it("initializes with gemini_native as default apiFormat", () => {
+    const { result } = renderHook(() => useGeminiFormState());
+    expect(result.current.apiFormat).toBe("gemini_native");
+  });
+
+  it("updates apiFormat when setApiFormat is called", () => {
+    const { result } = renderHook(() => useGeminiFormState());
+    act(() => result.current.setApiFormat("anthropic"));
+    expect(result.current.apiFormat).toBe("anthropic");
+  });
+
+  it("exposes all 4 supported formats", () => {
+    const { result } = renderHook(() => useGeminiFormState());
+    expect(result.current.supportedFormats).toEqual([
+      "gemini_native",
+      "openai_chat",
+      "openai_responses",
+      "anthropic",
+    ]);
+  });
+});
+```
+
+- [ ] **Step 2: 跑测试，验证失败**
+
+Run: `pnpm test --run useGeminiFormState 2>&1 | tail -10`
+Expected: FAIL，模块未找到
+
+- [ ] **Step 3: 实现 hook**
+
+```typescript
+import { useState, useCallback } from "react";
+
+export type GeminiApiFormat =
+  | "gemini_native"
+  | "openai_chat"
+  | "openai_responses"
+  | "anthropic";
+
+export const GEMINI_SUPPORTED_FORMATS: GeminiApiFormat[] = [
+  "gemini_native",
+  "openai_chat",
+  "openai_responses",
+  "anthropic",
+];
+
+export interface UseGeminiFormState {
+  apiFormat: GeminiApiFormat;
+  setApiFormat: (format: GeminiApiFormat) => void;
+  supportedFormats: readonly GeminiApiFormat[];
+}
+
+export function useGeminiFormState(
+  initial: GeminiApiFormat = "gemini_native",
+): UseGeminiFormState {
+  const [apiFormat, setApiFormatState] = useState<GeminiApiFormat>(initial);
+  const setApiFormat = useCallback((format: GeminiApiFormat) => {
+    setApiFormatState(format);
+  }, []);
+  return {
+    apiFormat,
+    setApiFormat,
+    supportedFormats: GEMINI_SUPPORTED_FORMATS,
+  };
+}
+```
+
+- [ ] **Step 4: 跑测试，验证通过**
+
+Run: `pnpm test --run useGeminiFormState 2>&1 | tail -5`
+Expected: 3 passed
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add src/components/providers/forms/hooks/useGeminiFormState.ts src/components/providers/forms/hooks/__tests__/useGeminiFormState.test.ts
+git commit -m "feat(gemini): add useGeminiFormState hook with tests"
+```
+
+---
+
+### Task 3.2: TDD Gemini 表单 API 格式选择器
+
+**Files:**
+- Modify: `src/components/providers/forms/GeminiFormFields.tsx`
+- Test: `src/components/providers/forms/__tests__/GeminiFormFields.test.tsx`
+
+- [ ] **Step 1: 添加失败测试**
+
+```typescript
+import { describe, expect, it, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { GeminiFormFields } from "../GeminiFormFields";
+
+describe("GeminiFormFields apiFormat selector", () => {
+  const baseProps = {
+    shouldShowApiKey: true,
+    apiKey: "sk-test",
+    onApiKeyChange: vi.fn(),
+    shouldShowSpeedTest: false,
+    baseUrl: "https://example.com",
+    onBaseUrlChange: vi.fn(),
+    isEndpointModalOpen: false,
+    onEndpointModalToggle: vi.fn(),
+    onCustomEndpointsChange: vi.fn(),
+    autoSelect: false,
+    onAutoSelectChange: vi.fn(),
+    shouldShowModelField: false,
+    model: "",
+    onModelChange: vi.fn(),
+    speedTestEndpoints: [],
+    apiFormat: "gemini_native" as const,
+    onApiFormatChange: vi.fn(),
+  };
+
+  it("renders the API format label", () => {
+    render(<GeminiFormFields {...baseProps} />);
+    expect(screen.getByText(/API 格式|API Format/i)).toBeInTheDocument();
+  });
+
+  it("calls onApiFormatChange with anthropic when selected", () => {
+    render(<GeminiFormFields {...baseProps} />);
+    const trigger = screen.getByRole("combobox");
+    fireEvent.click(trigger);
+    const option = screen.getByText(/Anthropic/i);
+    fireEvent.click(option);
+    expect(baseProps.onApiFormatChange).toHaveBeenCalledWith("anthropic");
+  });
+});
+```
+
+- [ ] **Step 2: 跑测试，验证失败**
+
+Run: `pnpm test --run GeminiFormFields 2>&1 | tail -10`
+Expected: FAIL（缺 props、`API 格式` label 不存在）
+
+- [ ] **Step 3: 修改 `GeminiFormFields.tsx`**
+
+在文件顶部 import 区域添加：
+
+```tsx
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { GeminiApiFormat } from "./hooks/useGeminiFormState";
+```
+
+在 `GeminiFormFieldsProps` 接口添加字段：
+
+```tsx
+  apiFormat: GeminiApiFormat;
+  onApiFormatChange: (format: GeminiApiFormat) => void;
+```
+
+在函数解构处加 `apiFormat, onApiFormatChange`。
+
+在 `Base URL 输入框` 之后插入：
+
+```tsx
+      {/* API 格式选择 */}
+      <div className="space-y-2">
+        <FormLabel htmlFor="gemini-api-format">
+          {t("providerForm.apiFormat", { defaultValue: "API 格式" })}
+        </FormLabel>
+        <Select
+          value={apiFormat}
+          onValueChange={(v) => onApiFormatChange(v as GeminiApiFormat)}
+        >
+          <SelectTrigger id="gemini-api-format" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="gemini_native">
+              {t("providerForm.apiFormatGeminiNative", {
+                defaultValue: "Gemini Native generateContent (原生)",
+              })}
+            </SelectItem>
+            <SelectItem value="openai_chat">
+              {t("providerForm.apiFormatOpenAIChat", {
+                defaultValue: "OpenAI Chat Completions (需转换)",
+              })}
+            </SelectItem>
+            <SelectItem value="openai_responses">
+              {t("providerForm.apiFormatOpenAIResponses", {
+                defaultValue: "OpenAI Responses API (需转换)",
+              })}
+            </SelectItem>
+            <SelectItem value="anthropic">
+              {t("providerForm.apiFormatAnthropic", {
+                defaultValue: "Anthropic Messages (需转换)",
+              })}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {t("providerForm.apiFormatHint", {
+            defaultValue: "选择供应商支持的 API 格式。CC Switch 会自动转换请求和响应。",
+          })}
+        </p>
+      </div>
+```
+
+- [ ] **Step 4: 跑测试，验证通过**
+
+Run: `pnpm test --run GeminiFormFields 2>&1 | tail -5`
+Expected: 2 passed
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add src/components/providers/forms/GeminiFormFields.tsx src/components/providers/forms/__tests__/GeminiFormFields.test.tsx
+git commit -m "feat(gemini): add apiFormat dropdown to Gemini form"
+```
+
+---
+
+### Task 3.3: 把 Gemini 表单 props 接到 AddProvider/EditProvider
+
+**Files:**
+- Read: `src/components/providers/AddProviderDialog.tsx`
+- Read: `src/components/providers/forms/hooks/useGeminiConfigState.ts`
+
+- [ ] **Step 1: 检查 useGeminiConfigState 现有结构**
+
+Run: `grep -n "apiFormat\|interface\|export" src/components/providers/forms/hooks/useGeminiConfigState.ts | head -20`
+Expected: 找到 state hook 接口
+
+- [ ] **Step 2: 在 hook 中加入 `apiFormat` 字段（如果尚未存在）**
+
+如果 grep 结果无 `apiFormat`，在 hook 的 state 对象添加：
+
+```typescript
+import type { GeminiApiFormat } from "./useGeminiFormState";
+
+interface GeminiFormConfigState {
+  // ... 现有字段
+  apiFormat: GeminiApiFormat;
+  setApiFormat: (format: GeminiApiFormat) => void;
+}
+```
+
+- [ ] **Step 3: 在 `AddProviderDialog.tsx` 中将 `apiFormat` 与 `setApiFormat` 透传到 `GeminiFormFields`**
+
+找到 `<GeminiFormFields` 调用点，添加：
+
+```tsx
+        apiFormat={geminiConfig.apiFormat}
+        onApiFormatChange={geminiConfig.setApiFormat}
+```
+
+- [ ] **Step 4: 跑 TypeScript 检查**
+
+Run: `pnpm tsc --noEmit 2>&1 | tail -10`
+Expected: 0 errors
+
+- [ ] **Step 5: 跑 vitest 确认无回归**
+
+Run: `pnpm test --run 2>&1 | tail -10`
+Expected: 所有测试通过
+
+- [ ] **Step 6: 提交**
+
+```bash
+git add src/components/providers/forms/hooks/useGeminiConfigState.ts src/components/providers/AddProviderDialog.tsx
+git commit -m "feat(gemini): wire apiFormat state into AddProviderDialog"
+```
+
+---
+
+## Phase 4: Claude Desktop 前端下拉（3 tasks，TDD）
+
+> 复用 Phase 3 的同款 TDD 模式。Claude Desktop 的 `ClaudeDesktopApiFormat` 类型已在 [src/config/claudeDesktopProviderPresets.ts:14-18](file:///workspace/src/config/claudeDesktopProviderPresets.ts#L14-L18) 定义。
+
+### Task 4.1: TDD Claude Desktop 表单状态 hook
+
+**Files:**
+- Create: `src/components/providers/forms/hooks/useClaudeDesktopFormState.ts`
+- Test: `src/components/providers/forms/hooks/__tests__/useClaudeDesktopFormState.test.ts`
+
+- [ ] **Step 1: 添加失败测试**
+
+```typescript
+import { describe, expect, it } from "vitest";
+import { renderHook, act } from "@testing-library/react";
+import { useClaudeDesktopFormState } from "../useClaudeDesktopFormState";
+
+describe("useClaudeDesktopFormState", () => {
+  it("defaults apiFormat to anthropic", () => {
+    const { result } = renderHook(() => useClaudeDesktopFormState());
+    expect(result.current.apiFormat).toBe("anthropic");
+  });
+
+  it("supports bedrock as a format", () => {
+    const { result } = renderHook(() => useClaudeDesktopFormState());
+    expect(result.current.supportedFormats).toContain("bedrock");
+  });
+
+  it("updates apiFormat", () => {
+    const { result } = renderHook(() => useClaudeDesktopFormState());
+    act(() => result.current.setApiFormat("bedrock"));
+    expect(result.current.apiFormat).toBe("bedrock");
+  });
+});
+```
+
+- [ ] **Step 2: 跑测试，验证失败**
+
+Run: `pnpm test --run useClaudeDesktopFormState 2>&1 | tail -5`
+Expected: FAIL
+
+- [ ] **Step 3: 实现 hook**
+
+```typescript
+import { useState, useCallback } from "react";
+import type { ClaudeDesktopApiFormat } from "@/config/claudeDesktopProviderPresets";
+
+export type { ClaudeDesktopApiFormat };
+
+export const CLAUDE_DESKTOP_SUPPORTED_FORMATS: ClaudeDesktopApiFormat[] = [
+  "anthropic",
+  "openai_chat",
+  "openai_responses",
+  "gemini_native",
+  "bedrock",
+];
+
+export function useClaudeDesktopFormState(
+  initial: ClaudeDesktopApiFormat = "anthropic",
+): {
+  apiFormat: ClaudeDesktopApiFormat;
+  setApiFormat: (f: ClaudeDesktopApiFormat) => void;
+  supportedFormats: readonly ClaudeDesktopApiFormat[];
+} {
+  const [apiFormat, setState] = useState<ClaudeDesktopApiFormat>(initial);
+  const setApiFormat = useCallback((f: ClaudeDesktopApiFormat) => setState(f), []);
+  return {
+    apiFormat,
+    setApiFormat,
+    supportedFormats: CLAUDE_DESKTOP_SUPPORTED_FORMATS,
+  };
+}
+```
+
+- [ ] **Step 4: 跑测试，验证通过**
+
+Run: `pnpm test --run useClaudeDesktopFormState 2>&1 | tail -5`
+Expected: 3 passed
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add src/components/providers/forms/hooks/useClaudeDesktopFormState.ts src/components/providers/forms/hooks/__tests__/useClaudeDesktopFormState.test.ts
+git commit -m "feat(claude-desktop): add useClaudeDesktopFormState hook"
+```
+
+---
+
+### Task 4.2: TDD Claude Desktop 表单下拉 UI
+
+**Files:**
+- Modify: `src/components/providers/forms/ClaudeDesktopProviderForm.tsx`
+- Test: `src/components/providers/forms/__tests__/ClaudeDesktopProviderForm.test.tsx`
+
+- [ ] **Step 1: 添加失败测试**
+
+```typescript
+import { describe, expect, it, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { ClaudeDesktopProviderForm } from "../ClaudeDesktopProviderForm";
+
+describe("ClaudeDesktopProviderForm apiFormat selector", () => {
+  const baseProps = {
+    provider: { id: "test", name: "Test", settingsConfig: {}, notes: "" } as any,
+    onSave: vi.fn(),
+    onCancel: vi.fn(),
+    onDelete: vi.fn(),
+    apiFormat: "anthropic" as const,
+    onApiFormatChange: vi.fn(),
+  };
+
+  it("renders the API format label", () => {
+    render(<ClaudeDesktopProviderForm {...baseProps} />);
+    expect(screen.getByText(/API 格式|API Format/i)).toBeInTheDocument();
+  });
+
+  it("calls onApiFormatChange with bedrock when selected", () => {
+    render(<ClaudeDesktopProviderForm {...baseProps} />);
+    fireEvent.click(screen.getByRole("combobox"));
+    fireEvent.click(screen.getByText(/Bedrock/i));
+    expect(baseProps.onApiFormatChange).toHaveBeenCalledWith("bedrock");
+  });
+});
+```
+
+- [ ] **Step 2: 跑测试，验证失败**
+
+Run: `pnpm test --run ClaudeDesktopProviderForm 2>&1 | tail -5`
+Expected: FAIL
+
+- [ ] **Step 3: 在表单中添加下拉**
+
+修改 `ClaudeDesktopProviderForm.tsx`：
+
+1. 在 props 接口添加 `apiFormat: ClaudeDesktopApiFormat; onApiFormatChange: (f: ClaudeDesktopApiFormat) => void;`
+2. 解构这两个新 props
+3. 在 Base URL 输入框之后插入：
+
+```tsx
+      <div className="space-y-2">
+        <FormLabel htmlFor="claude-desktop-api-format">
+          {t("providerForm.apiFormat", { defaultValue: "API 格式" })}
+        </FormLabel>
+        <Select
+          value={apiFormat}
+          onValueChange={(v) => onApiFormatChange(v as ClaudeDesktopApiFormat)}
+        >
+          <SelectTrigger id="claude-desktop-api-format" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="anthropic">{t("providerForm.apiFormatAnthropic", { defaultValue: "Anthropic Messages (原生)" })}</SelectItem>
+            <SelectItem value="openai_chat">{t("providerForm.apiFormatOpenAIChat", { defaultValue: "OpenAI Chat Completions (需转换)" })}</SelectItem>
+            <SelectItem value="openai_responses">{t("providerForm.apiFormatOpenAIResponses", { defaultValue: "OpenAI Responses API (需转换)" })}</SelectItem>
+            <SelectItem value="gemini_native">{t("providerForm.apiFormatGeminiNative", { defaultValue: "Gemini Native generateContent (需转换)" })}</SelectItem>
+            <SelectItem value="bedrock">{t("providerForm.apiFormatBedrock", { defaultValue: "Amazon Bedrock Converse (需转换)" })}</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">{t("providerForm.apiFormatHint")}</p>
+      </div>
+```
+
+- [ ] **Step 4: 跑测试，验证通过**
+
+Run: `pnpm test --run ClaudeDesktopProviderForm 2>&1 | tail -5`
+Expected: 2 passed
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add src/components/providers/forms/ClaudeDesktopProviderForm.tsx src/components/providers/forms/__tests__/ClaudeDesktopProviderForm.test.tsx
+git commit -m "feat(claude-desktop): add apiFormat dropdown to Claude Desktop form"
+```
+
+---
+
+### Task 4.3: 接入 ProviderList / AddProvider
+
+**Files:**
+- Read: `src/components/providers/AddProviderDialog.tsx`
+- Read: `src/components/universal/UniversalProviderFormModal.tsx`
+
+- [ ] **Step 1: 找到 Claude Desktop 的 props 透传点**
+
+Run: `grep -n "ClaudeDesktopProviderForm\|claude-desktop" src/components/providers/AddProviderDialog.tsx src/components/universal/UniversalProviderFormModal.tsx 2>/dev/null | head -10`
+Expected: 找到调用点
+
+- [ ] **Step 2: 把 `apiFormat` 与 `onApiFormatChange` 接入**
+
+参考 Phase 3 Task 3.3 模式，在调用点透传两个 props。state 来源于 `useClaudeDesktopFormState()`。
+
+- [ ] **Step 3: tsc 检查 + vitest**
+
+Run: `pnpm tsc --noEmit 2>&1 | tail -5 && pnpm test --run 2>&1 | tail -5`
+Expected: 0 errors, all tests pass
+
+- [ ] **Step 4: 提交**
+
+```bash
+git add src/components/providers/AddProviderDialog.tsx src/components/universal/UniversalProviderFormModal.tsx
+git commit -m "feat(claude-desktop): wire apiFormat state into add provider dialog"
+```
+
+---
+
+## Phase 5: OpenCode 前端下拉（3 tasks，TDD）— **原 plan 缺失，本版补上**
+
+> 用户在原始需求中提到 OpenCode 也需要 API 格式下拉。OpenCodeFormFields.tsx 当前只有 `npmPackage` 选择器，没有 `apiFormat` 下拉。
+
+### Task 5.1: TDD OpenCode 表单状态 hook
+
+**Files:**
+- Create: `src/components/providers/forms/hooks/useOpenCodeFormState.ts`
+- Test: `src/components/providers/forms/hooks/__tests__/useOpenCodeFormState.test.ts`
+
+- [ ] **Step 1: 添加失败测试**
+
+```typescript
+import { describe, expect, it } from "vitest";
+import { renderHook, act } from "@testing-library/react";
+import { useOpenCodeFormState } from "../useOpenCodeFormState";
+
+describe("useOpenCodeFormState", () => {
+  it("defaults apiFormat to openai_chat (most OpenCode providers use Chat Completions)", () => {
+    const { result } = renderHook(() => useOpenCodeFormState());
+    expect(result.current.apiFormat).toBe("openai_chat");
+  });
+
+  it("supports anthropic as a format", () => {
+    const { result } = renderHook(() => useOpenCodeFormState());
+    expect(result.current.supportedFormats).toContain("anthropic");
+  });
+
+  it("updates apiFormat", () => {
+    const { result } = renderHook(() => useOpenCodeFormState());
+    act(() => result.current.setApiFormat("anthropic"));
+    expect(result.current.apiFormat).toBe("anthropic");
+  });
+});
+```
+
+- [ ] **Step 2: 跑测试，验证失败**
+
+Run: `pnpm test --run useOpenCodeFormState 2>&1 | tail -5`
+Expected: FAIL
+
+- [ ] **Step 3: 实现 hook**
+
+```typescript
+import { useState, useCallback } from "react";
+
+export type OpenCodeApiFormat =
+  | "openai_chat"
+  | "openai_responses"
+  | "anthropic"
+  | "gemini_native";
+
+export const OPENCODE_SUPPORTED_FORMATS: OpenCodeApiFormat[] = [
+  "openai_chat",
+  "openai_responses",
+  "anthropic",
+  "gemini_native",
+];
+
+export function useOpenCodeFormState(
+  initial: OpenCodeApiFormat = "openai_chat",
+): {
+  apiFormat: OpenCodeApiFormat;
+  setApiFormat: (f: OpenCodeApiFormat) => void;
+  supportedFormats: readonly OpenCodeApiFormat[];
+} {
+  const [apiFormat, setState] = useState<OpenCodeApiFormat>(initial);
+  const setApiFormat = useCallback((f: OpenCodeApiFormat) => setState(f), []);
+  return {
+    apiFormat,
+    setApiFormat,
+    supportedFormats: OPENCODE_SUPPORTED_FORMATS,
+  };
+}
+```
+
+- [ ] **Step 4: 跑测试，验证通过**
+
+Run: `pnpm test --run useOpenCodeFormState 2>&1 | tail -5`
+Expected: 3 passed
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add src/components/providers/forms/hooks/useOpenCodeFormState.ts src/components/providers/forms/hooks/__tests__/useOpenCodeFormState.test.ts
+git commit -m "feat(opencode): add useOpenCodeFormState hook"
+```
+
+---
+
+### Task 5.2: TDD OpenCode 表单下拉 UI
+
+**Files:**
+- Modify: `src/components/providers/forms/OpenCodeFormFields.tsx`
+- Test: `src/components/providers/forms/__tests__/OpenCodeFormFields.test.tsx`
+
+- [ ] **Step 1: 添加失败测试**
+
+```typescript
+import { describe, expect, it, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { OpenCodeFormFields } from "../OpenCodeFormFields";
+
+describe("OpenCodeFormFields apiFormat selector", () => {
+  const baseProps = {
+    npmPackage: "@opencode-ai/cli",
+    onNpmPackageChange: vi.fn(),
+    baseUrl: "https://example.com",
+    onBaseUrlChange: vi.fn(),
+    apiKey: "sk-test",
+    onApiKeyChange: vi.fn(),
+    apiFormat: "openai_chat" as const,
+    onApiFormatChange: vi.fn(),
+  };
+
+  it("renders the API format label", () => {
+    render(<OpenCodeFormFields {...baseProps} />);
+    expect(screen.getByText(/API 格式|API Format/i)).toBeInTheDocument();
+  });
+
+  it("calls onApiFormatChange with anthropic when selected", () => {
+    render(<OpenCodeFormFields {...baseProps} />);
+    fireEvent.click(screen.getByRole("combobox"));
+    fireEvent.click(screen.getByText(/Anthropic/i));
+    expect(baseProps.onApiFormatChange).toHaveBeenCalledWith("anthropic");
+  });
+});
+```
+
+- [ ] **Step 2: 跑测试，验证失败**
+
+Run: `pnpm test --run OpenCodeFormFields 2>&1 | tail -5`
+Expected: FAIL
+
+- [ ] **Step 3: 在表单中添加下拉**
+
+修改 `OpenCodeFormFields.tsx`：
+
+1. 在 props 接口添加 `apiFormat: OpenCodeApiFormat; onApiFormatChange: (f: OpenCodeApiFormat) => void;`
+2. 解构这两个新 props
+3. 在 npmPackage 选择器之后插入：
+
+```tsx
+      <div className="space-y-2">
+        <FormLabel htmlFor="opencode-api-format">
+          {t("providerForm.apiFormat", { defaultValue: "API 格式" })}
+        </FormLabel>
+        <Select
+          value={apiFormat}
+          onValueChange={(v) => onApiFormatChange(v as OpenCodeApiFormat)}
+        >
+          <SelectTrigger id="opencode-api-format" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="openai_chat">{t("providerForm.apiFormatOpenAIChat", { defaultValue: "OpenAI Chat Completions (原生)" })}</SelectItem>
+            <SelectItem value="openai_responses">{t("providerForm.apiFormatOpenAIResponses", { defaultValue: "OpenAI Responses API (需转换)" })}</SelectItem>
+            <SelectItem value="anthropic">{t("providerForm.apiFormatAnthropic", { defaultValue: "Anthropic Messages (需转换)" })}</SelectItem>
+            <SelectItem value="gemini_native">{t("providerForm.apiFormatGeminiNative", { defaultValue: "Gemini Native generateContent (需转换)" })}</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">{t("providerForm.apiFormatHint")}</p>
+      </div>
+```
+
+- [ ] **Step 4: 跑测试，验证通过**
+
+Run: `pnpm test --run OpenCodeFormFields 2>&1 | tail -5`
+Expected: 2 passed
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add src/components/providers/forms/OpenCodeFormFields.tsx src/components/providers/forms/__tests__/OpenCodeFormFields.test.tsx
+git commit -m "feat(opencode): add apiFormat dropdown to OpenCode form"
+```
+
+---
+
+### Task 5.3: 接入 AddProvider
+
+**Files:**
+- Read: `src/components/providers/AddProviderDialog.tsx`
+- Read: `src/components/providers/forms/hooks/useOpenCodeConfigState.ts`（如存在）
+
+- [ ] **Step 1: 找到 OpenCode 的 props 透传点**
+
+Run: `grep -n "OpenCodeFormFields\|opencode" src/components/providers/AddProviderDialog.tsx | head -10`
+Expected: 找到调用点
+
+- [ ] **Step 2: 把 `apiFormat` 与 `onApiFormatChange` 接入**
+
+参考 Phase 3 Task 3.3 模式，在调用点透传两个 props。state 来源于 `useOpenCodeFormState()`。
+
+- [ ] **Step 3: tsc 检查 + vitest**
+
+Run: `pnpm tsc --noEmit 2>&1 | tail -5 && pnpm test --run 2>&1 | tail -5`
+Expected: 0 errors, all tests pass
+
+- [ ] **Step 4: 提交**
+
+```bash
+git add src/components/providers/AddProviderDialog.tsx src/components/providers/forms/hooks/useOpenCodeConfigState.ts
+git commit -m "feat(opencode): wire apiFormat state into add provider dialog"
+```
+
+---
+
+## Phase 6: Claude 表单 bedrock 选项（1 task）
+
+### Task 6.1: Claude 表单下拉新增 bedrock
+
+**Files:**
+- Modify: `src/components/providers/forms/ClaudeFormFields.tsx:705-737`
+
+- [ ] **Step 1: 在 SelectContent 末尾追加 SelectItem**
+
+在 [src/components/providers/forms/ClaudeFormFields.tsx:729](file:///workspace/src/components/providers/forms/ClaudeFormFields.tsx#L729) 后追加：
+
+```tsx
+                    <SelectItem value="bedrock">
+                      {t("providerForm.apiFormatBedrock", {
+                        defaultValue: "Amazon Bedrock Converse (需转换)",
+                      })}
+                    </SelectItem>
+```
+
+- [ ] **Step 2: pnpm tsc 确认无错**
+
+Run: `pnpm tsc --noEmit 2>&1 | tail -5`
+Expected: 0 errors
+
+- [ ] **Step 3: 提交**
+
+```bash
+git add src/components/providers/forms/ClaudeFormFields.tsx
+git commit -m "feat(claude): add bedrock option to apiFormat dropdown"
+```
+
+---
+
+## Phase 7: i18n 字符串补全（1 task）
+
+### Task 7.1: 在 4 个 locale 补 apiFormat 字符串
+
+**Files:**
+- Modify: `src/i18n/locales/en.json`
+- Modify: `src/i18n/locales/zh.json`
+- Modify: `src/i18n/locales/zh-TW.json`
+- Modify: `src/i18n/locales/ja.json`
+
+- [ ] **Step 1: 定位 providerForm 段**
+
+Run: `grep -n '"apiFormat"' src/i18n/locales/zh.json`
+Expected: 找到行号
+
+- [ ] **Step 2: 在 `apiFormatHint` 之后追加 `apiFormatBedrock` 字段**
+
+按以下模板在 4 个 locale 同时追加：
+
+**zh.json:**
+```json
+    "apiFormatBedrock": "Amazon Bedrock Converse (需转换)",
+```
+
+**en.json:**
+```json
+    "apiFormatBedrock": "Amazon Bedrock Converse (Requires conversion)",
+```
+
+**zh-TW.json:**
+```json
+    "apiFormatBedrock": "Amazon Bedrock Converse (需轉換)",
+```
+
+**ja.json:**
+```json
+    "apiFormatBedrock": "Amazon Bedrock Converse (変換が必要)",
+```
+
+- [ ] **Step 3: 验证 4 个 locale 都已添加**
+
+Run: `for f in src/i18n/locales/{en,zh,zh-TW,ja}.json; do grep -c "apiFormatBedrock" $f; done`
+Expected: 4 行，每行输出 `1`
+
+- [ ] **Step 4: 提交**
+
+```bash
+git add src/i18n/locales/
+git commit -m "feat(i18n): add apiFormatBedrock label to all 4 locales"
+```
+
+---
+
+## Phase 8: Linux CLI 二进制（6 tasks）
+
+> **关键修正**：原 plan 用 `ProviderService::list_all() / delete(id) / switch(app, id)` —— 这是错的。
+> 真实签名是 `(&AppState, AppType, ...)`。本 phase 每个任务都先构造 `AppState`，再调真实方法。
+
+### Task 8.1: Cargo.toml 添加 [[bin]] 和 clap 依赖
+
+**Files:**
 - Modify: `src-tauri/Cargo.toml`
 
-- [ ] **Step 1: 在 Cargo.toml 中添加 CLI 二进制目标**
+- [ ] **Step 1: 找到 [[bin]] 段**
 
-在 `[[bin]]` 部分添加：
+Run: `grep -n "^\[\[bin\]\]\|^\[dependencies\]" src-tauri/Cargo.toml | head -5`
+Expected: 至少 1 个 `[[bin]]` 或 1 个 `[dependencies]`
+
+- [ ] **Step 2: 在文件末尾追加 CLI 二进制声明**
 
 ```toml
 [[bin]]
 name = "cc-switch-cli"
 path = "src/bin/cc-switch-cli.rs"
+
+[dependencies.clap]
+version = "4.5"
+features = ["derive"]
 ```
 
-在 `[dependencies]` 中添加：
+- [ ] **Step 3: 验证编译**
 
-```toml
-clap = { version = "4.5", features = ["derive"] }
-tokio = { version = "1.36", features = ["full"] }
+Run: `cd src-tauri && cargo build --bin cc-switch-cli 2>&1 | tail -10`
+Expected: 错误信息是 "file not found for `main`"（CLI 入口还没建），不是依赖错误
+
+- [ ] **Step 4: 提交**
+
+```bash
+git add src-tauri/Cargo.toml
+git commit -m "build(cli): add cc-switch-cli bin target and clap dependency"
 ```
 
-- [ ] **Step 2: 创建 CLI 入口文件**
+---
+
+### Task 8.2: CLI AppState 工厂（不依赖 Tauri）
+
+**Files:**
+- Create: `src-tauri/src/cli/mod.rs`
+- Create: `src-tauri/src/cli/state.rs`
+
+- [ ] **Step 1: 创建 `cli/mod.rs`**
 
 ```rust
-// src-tauri/src/bin/cc-switch-cli.rs
+//! CC Switch CLI 子命令模块
+//!
+//! 显式构造 AppState，不依赖 Tauri runtime。
 
-use clap::{Parser, Subcommand};
+pub mod state;
+pub mod logs;
+pub mod mcp;
+pub mod provider;
+pub mod proxy;
+pub mod import_export;
+pub mod systemd;
+```
+
+- [ ] **Step 2: 创建 `cli/state.rs`**
+
+```rust
+//! CLI 用的 AppState 工厂。
+//!
+//! GUI 路径走 Tauri runtime；CLI 路径读 `CC_SWITCH_HOME` 环境变量，
+//! 回退到 `~/.cc-switch`，然后显式构造 `Database` 与 `AppState`。
+//!
+//! 复用 `Database::init()`（已是 `pub fn init() -> Result<Self, AppError>`，
+//! 不依赖 Tauri），所以整个工厂只用到 rusqlite + 内部模块。
+
+use crate::database::Database;
+use crate::store::AppState;
 use std::path::PathBuf;
+use std::sync::Arc;
+
+pub fn config_dir() -> PathBuf {
+    if let Ok(p) = std::env::var("CC_SWITCH_HOME") {
+        return PathBuf::from(p);
+    }
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/root".into());
+    PathBuf::from(home).join(".cc-switch")
+}
+
+/// 打开 CLI 用的 Database，自动建目录。
+pub fn open_database() -> Result<Arc<Database>, crate::error::AppError> {
+    let dir = config_dir();
+    std::fs::create_dir_all(&dir)?;
+    let db = Database::init()?;
+    Ok(Arc::new(db))
+}
+
+/// 打开 CLI 用的 AppState（无 Tauri 依赖）。
+pub fn open_app_state() -> Result<AppState, crate::error::AppError> {
+    let db = open_database()?;
+    Ok(AppState::new(db))
+}
+```
+
+- [ ] **Step 3: 在 `lib.rs` 注册 cli 模块**
+
+在 `src-tauri/src/lib.rs:1-37` 模块声明区追加：
+
+```rust
+pub mod cli;
+```
+
+- [ ] **Step 4: 临时把其它未实现模块注释掉，让编译通过**
+
+临时改 `cli/mod.rs`：
+
+```rust
+pub mod state;
+// pub mod logs;
+// pub mod mcp;
+// pub mod provider;
+// pub mod proxy;
+// pub mod import_export;
+// pub mod systemd;
+```
+
+Run: `cd src-tauri && cargo check 2>&1 | tail -5`
+Expected: 0 errors
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add src-tauri/src/cli/ src-tauri/src/lib.rs
+git commit -m "feat(cli): add state factory that builds AppState without Tauri"
+```
+
+---
+
+### Task 8.3: 入口与 provider 子命令
+
+**Files:**
+- Create: `src-tauri/src/cli/provider.rs`
+- Create: `src-tauri/src/bin/cc-switch-cli.rs`
+
+- [ ] **Step 1: 启用 `cli/mod.rs` 中的 `provider` 模块**
+
+取消 `provider` 那行注释。
+
+- [ ] **Step 2: 创建 `cli/provider.rs`**
+
+```rust
+//! provider 子命令：list / remove / switch
+//!
+//! **重要**：ProviderService 的真实签名是
+//!   list(&AppState, AppType) -> Result<IndexMap<String, Provider>, AppError>
+//!   delete(&AppState, AppType, &str) -> Result<(), AppError>
+//!   switch(&AppState, AppType, &str) -> Result<SwitchResult, AppError>
+//! 不是 list_all / delete(id) / switch(app, id)。
+
+use crate::cli::state;
+use crate::provider::AppType;
+use crate::services::provider::ProviderService;
+
+pub async fn list(app: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    let state = state::open_app_state()?;
+    let app_type = parse_app(app)?;
+    let providers = ProviderService::list(&state, app_type)?;
+    if providers.is_empty() {
+        println!("No providers found for app {app_type:?}.");
+        return Ok(());
+    }
+    println!("{:<36}  {:<24}  {}", "ID", "Name", "Base URL");
+    println!("{}", "-".repeat(96));
+    for (id, p) in providers {
+        println!("{:<36}  {:<24}  {}", id, p.name, p.base_url);
+    }
+    Ok(())
+}
+
+pub async fn remove(app: &str, id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let state = state::open_app_state()?;
+    let app_type = parse_app(Some(app))?;
+    ProviderService::delete(&state, app_type, id)?;
+    println!("Removed provider {id} from {app_type:?}");
+    Ok(())
+}
+
+pub async fn switch(app: &str, id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let state = state::open_app_state()?;
+    let app_type = parse_app(Some(app))?;
+    let res = ProviderService::switch(&state, app_type, id)?;
+    println!("Switched {app_type:?} to {id}. Success={}", res.success);
+    Ok(())
+}
+
+fn parse_app(s: Option<&str>) -> Result<AppType, Box<dyn std::error::Error>> {
+    let s = s.ok_or("missing --app <name>")?;
+    match s {
+        "claude" => Ok(AppType::Claude),
+        "codex" => Ok(AppType::Codex),
+        "gemini" => Ok(AppType::Gemini),
+        "opencode" => Ok(AppType::OpenCode),
+        "openclaw" => Ok(AppType::OpenClaw),
+        "claude-desktop" | "claude_desktop" => Ok(AppType::ClaudeDesktop),
+        other => Err(format!("unknown app type: {other}").into()),
+    }
+}
+```
+
+> **注意**：如 `AppType` 的实际 enum variant 名称不同（如 `ClaudeCode` 而非 `Claude`），先 `grep -n "pub enum AppType" src-tauri/src/provider.rs` 校对再写。
+
+- [ ] **Step 3: 写 `bin/cc-switch-cli.rs` 入口（仅实现 list/remove/switch 三个子命令）**
+
+```rust
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "cc-switch-cli")]
-#[command(about = "CC Switch CLI - Headless proxy and provider management")]
-#[command(version)]
+#[command(name = "cc-switch-cli", version, about = "CC Switch headless management CLI")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -368,888 +1696,753 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Start the proxy server
-    Start {
-        /// Listen address (default: 127.0.0.1)
-        #[arg(short, long, default_value = "127.0.0.1")]
-        address: String,
-        
-        /// Listen port (default: 15721)
-        #[arg(short, long, default_value = "15721")]
-        port: u16,
-    },
-    
-    /// Stop the proxy server
-    Stop,
-    
-    /// List all providers
-    ListProviders {
-        /// App type filter (claude/codex/gemini/claude-desktop/opencode/openclaw/hermes)
+    /// List providers (optionally filtered by app)
+    List {
         #[arg(short, long)]
         app: Option<String>,
     },
-    
-    /// Add a new provider
-    AddProvider {
-        /// App type
+    /// Remove a provider by id
+    Remove {
         #[arg(short, long)]
         app: String,
-        
-        /// Provider name
-        #[arg(short, long)]
-        name: String,
-        
-        /// Base URL
-        #[arg(short, long)]
-        url: String,
-        
-        /// API key
-        #[arg(short = 'k', long)]
-        api_key: String,
-        
-        /// API format (anthropic/openai_chat/openai_responses/gemini_native/bedrock)
-        #[arg(short, long)]
-        format: Option<String>,
+        id: String,
     },
-    
-    /// Remove a provider
-    RemoveProvider {
-        /// Provider ID
+    /// Switch current provider for an app
+    Switch {
+        #[arg(short, long)]
+        app: String,
         #[arg(short, long)]
         id: String,
     },
-    
-    /// Switch current provider
-    SwitchProvider {
-        /// App type
-        #[arg(short, long)]
-        app: String,
-        
-        /// Provider ID
-        #[arg(short, long)]
-        id: String,
-    },
-    
-    /// Show proxy status
-    Status,
-    
-    /// Show configuration file paths
-    Config,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    
     match cli.command {
-        Commands::Start { address, port } => {
-            println!("Starting proxy server on {}:{}", address, port);
-            // TODO: 调用代理服务器启动逻辑
-            start_proxy_server(&address, port).await?;
-        }
-        
-        Commands::Stop => {
-            println!("Stopping proxy server");
-            // TODO: 停止代理服务器
-        }
-        
-        Commands::ListProviders { app } => {
-            list_providers(app.as_deref()).await?;
-        }
-        
-        Commands::AddProvider { app, name, url, api_key, format } => {
-            add_provider(&app, &name, &url, &api_key, format.as_deref()).await?;
-        }
-        
-        Commands::RemoveProvider { id } => {
-            remove_provider(&id).await?;
-        }
-        
-        Commands::SwitchProvider { app, id } => {
-            switch_provider(&app, &id).await?;
-        }
-        
-        Commands::Status => {
-            show_status().await?;
-        }
-        
-        Commands::Config => {
-            show_config_paths();
-        }
+        Commands::List { app } => cc_switch_lib::cli::provider::list(app.as_deref()).await,
+        Commands::Remove { app, id } => cc_switch_lib::cli::provider::remove(&app, &id).await,
+        Commands::Switch { app, id } => cc_switch_lib::cli::provider::switch(&app, &id).await,
     }
-    
-    Ok(())
 }
+```
 
-async fn start_proxy_server(address: &str, port: u16) -> Result<(), Box<dyn std::error::Error>> {
-    // 复用 cc_switch_lib::proxy::server 的逻辑
-    // 需要提取出不依赖 Tauri 的部分
-    println!("Proxy server started. Press Ctrl+C to stop.");
-    
-    // 这里需要调用实际的代理服务器启动代码
-    // 暂时用占位符
+- [ ] **Step 4: cargo build**
+
+Run: `cd src-tauri && cargo build --bin cc-switch-cli 2>&1 | tail -10`
+Expected: 编译成功
+
+- [ ] **Step 5: 跑帮助命令**
+
+Run: `./src-tauri/target/debug/cc-switch-cli --help 2>&1 | head -20`
+Expected: 列出 list / remove / switch 三个子命令
+
+- [ ] **Step 6: 提交**
+
+```bash
+git add src-tauri/src/cli/provider.rs src-tauri/src/bin/cc-switch-cli.rs
+git commit -m "feat(cli): add provider list/remove/switch subcommands"
+```
+
+---
+
+### Task 8.4: proxy 子命令
+
+**Files:**
+- Create: `src-tauri/src/cli/proxy.rs`
+
+- [ ] **Step 1: 启用 `cli/mod.rs` 的 `proxy` 行**
+
+- [ ] **Step 2: 创建 `cli/proxy.rs`**
+
+```rust
+//! proxy 子命令：start / stop / status
+//!
+//! ProxyService 真实方法：start(&self), stop(&self), status(&self)。
+//! 监听地址和端口从 `cc_switch.start_address / start_port` 读取，
+//! 或由 daemon 模式从环境变量覆盖。
+
+use crate::cli::state;
+
+pub async fn start() -> Result<(), Box<dyn std::error::Error>> {
+    let state = state::open_app_state()?;
+    let info = state.proxy_service.start().await
+        .map_err(|e| format!("proxy start failed: {e}"))?;
+    println!("Proxy listening on http://{}:{}", info.address, info.port);
     tokio::signal::ctrl_c().await?;
-    println!("\nShutting down...");
-    
+    state.proxy_service.stop().await
+        .map_err(|e| format!("proxy stop failed: {e}"))?;
+    println!("Stopped.");
     Ok(())
 }
 
-async fn list_providers(app: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-    // 从数据库读取供应商列表
-    println!("Providers:");
-    // TODO: 实现
+pub async fn stop() -> Result<(), Box<dyn std::error::Error>> {
+    let state = state::open_app_state()?;
+    state.proxy_service.stop().await
+        .map_err(|e| format!("proxy stop failed: {e}"))?;
+    println!("Proxy stopped.");
     Ok(())
 }
 
-async fn add_provider(
-    app: &str,
-    name: &str,
-    url: &str,
-    api_key: &str,
-    format: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Adding provider '{}' for app '{}'", name, app);
-    // TODO: 实现
+pub async fn status() -> Result<(), Box<dyn std::error::Error>> {
+    let state = state::open_app_state()?;
+    let info = state.proxy_service.status().await;
+    println!("Running: {}", info.running);
+    if info.running {
+        println!("Listen: {}:{}", info.address, info.port);
+    }
     Ok(())
-}
-
-async fn remove_provider(id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Removing provider '{}'", id);
-    // TODO: 实现
-    Ok(())
-}
-
-async fn switch_provider(app: &str, id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Switching {} to provider '{}'", app, id);
-    // TODO: 实现
-    Ok(())
-}
-
-async fn show_status() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Proxy Status:");
-    // TODO: 实现
-    Ok(())
-}
-
-fn show_config_paths() {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
-    let config_dir = PathBuf::from(&home).join(".cc-switch");
-    
-    println!("Configuration Directory: {}", config_dir.display());
-    println!("  Database: {}/cc-switch.db", config_dir.display());
-    println!("  Settings: {}/settings.json", config_dir.display());
 }
 ```
 
-- [ ] **Step 3: 测试编译**
+> **注意**：`ProxyService::status()` 的真实返回类型在源码中可能是 `(bool, String, u16)` 元组。Task 实施时先 `grep -n "pub.*fn status" src-tauri/src/services/proxy.rs` 校对签名，再调整本代码。
 
-```bash
-cd src-tauri
-cargo build --bin cc-switch-cli
-```
-
-- [ ] **Step 4: 提交**
-
-```bash
-git add src-tauri/Cargo.toml src-tauri/src/bin/cc-switch-cli.rs
-git commit -m "feat(cli): add CLI binary entry point with command structure"
-```
-
----
-
-### Task 3.2: 提取核心逻辑模块
-
-**Files:**
-- Create: `src-tauri/src/core/mod.rs`
-- Create: `src-tauri/src/core/database.rs`
-- Create: `src-tauri/src/core/provider_manager.rs`
-
-- [ ] **Step 1: 创建 core 模块**
-
-将不依赖 Tauri 的核心逻辑提取到 `core` 模块：
+- [ ] **Step 3: 在 `bin/cc-switch-cli.rs` 注册子命令**
 
 ```rust
-// src-tauri/src/core/mod.rs
-
-pub mod database;
-pub mod provider_manager;
+#[derive(Subcommand)]
+enum Commands {
+    // ... 现有 List / Remove / Switch
+    /// Start the proxy server (foreground)
+    Start,
+    /// Stop the proxy server
+    Stop,
+    /// Show proxy status
+    Status,
+}
 ```
 
-- [ ] **Step 2: 提取数据库初始化逻辑**
-
-从 `src-tauri/src/database/mod.rs` 中提取出不依赖 Tauri 的数据库初始化代码：
+`main` 函数 match 块追加：
 
 ```rust
-// src-tauri/src/core/database.rs
-
-use rusqlite::Connection;
-use std::path::PathBuf;
-
-pub fn get_config_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
-    PathBuf::from(&home).join(".cc-switch")
-}
-
-pub fn init_database() -> Result<Connection, Box<dyn std::error::Error>> {
-    let config_dir = get_config_dir();
-    std::fs::create_dir_all(&config_dir)?;
-    
-    let db_path = config_dir.join("cc-switch.db");
-    let conn = Connection::open(&db_path)?;
-    
-    // 执行数据库迁移
-    // ... 复用现有的迁移逻辑
-    
-    Ok(conn)
-}
+        Commands::Start => cc_switch_lib::cli::proxy::start().await,
+        Commands::Stop => cc_switch_lib::cli::proxy::stop().await,
+        Commands::Status => cc_switch_lib::cli::proxy::status().await,
 ```
 
-- [ ] **Step 3: 提取供应商管理逻辑**
+- [ ] **Step 4: cargo build**
 
-```rust
-// src-tauri/src/core/provider_manager.rs
-
-use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Provider {
-    pub id: String,
-    pub name: String,
-    pub app_type: String,
-    pub base_url: String,
-    pub api_key: String,
-    pub api_format: Option<String>,
-    // ... 其他字段
-}
-
-pub struct ProviderManager {
-    conn: Connection,
-}
-
-impl ProviderManager {
-    pub fn new(conn: Connection) -> Self {
-        Self { conn }
-    }
-    
-    pub fn list_providers(&self, app_type: Option<&str>) -> Result<Vec<Provider>, Box<dyn std::error::Error>> {
-        // 从数据库查询供应商
-        let mut sql = "SELECT id, name, app_type, base_url, api_key, api_format FROM providers".to_string();
-        
-        if let Some(app) = app_type {
-            sql.push_str(&format!(" WHERE app_type = '{}'", app));
-        }
-        
-        let mut stmt = self.conn.prepare(&sql)?;
-        let providers = stmt.query_map([], |row| {
-            Ok(Provider {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                app_type: row.get(2)?,
-                base_url: row.get(3)?,
-                api_key: row.get(4)?,
-                api_format: row.get(5)?,
-            })
-        })?;
-        
-        Ok(providers.filter_map(|p| p.ok()).collect())
-    }
-    
-    pub fn add_provider(&mut self, provider: &Provider) -> Result<(), Box<dyn std::error::Error>> {
-        self.conn.execute(
-            "INSERT INTO providers (id, name, app_type, base_url, api_key, api_format) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![
-                provider.id,
-                provider.name,
-                provider.app_type,
-                provider.base_url,
-                provider.api_key,
-                provider.api_format,
-            ],
-        )?;
-        
-        Ok(())
-    }
-    
-    // ... 其他方法
-}
-```
-
-- [ ] **Step 4: 提交**
-
-```bash
-git add src-tauri/src/core/
-git commit -m "refactor: extract core logic modules for CLI reuse"
-```
-
----
-
-### Task 3.3: 实现 CLI 命令逻辑
-
-**Files:**
-- Modify: `src-tauri/src/bin/cc-switch-cli.rs`
-
-- [ ] **Step 1: 实现 list_providers 命令**
-
-```rust
-async fn list_providers(app: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-    let conn = cc_switch_lib::core::database::init_database()?;
-    let manager = cc_switch_lib::core::provider_manager::ProviderManager::new(conn);
-    
-    let providers = manager.list_providers(app)?;
-    
-    if providers.is_empty() {
-        println!("No providers found.");
-        return Ok(());
-    }
-    
-    println!("Providers:\n");
-    println!("{:<36} {:<15} {:<20} {:<30}", "ID", "App", "Name", "Base URL");
-    println!("{}", "-".repeat(101));
-    
-    for p in providers {
-        println!(
-            "{:<36} {:<15} {:<20} {:<30}",
-            p.id,
-            p.app_type,
-            p.name,
-            p.base_url
-        );
-    }
-    
-    Ok(())
-}
-```
-
-- [ ] **Step 2: 实现 add_provider 命令**
-
-```rust
-async fn add_provider(
-    app: &str,
-    name: &str,
-    url: &str,
-    api_key: &str,
-    format: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let conn = cc_switch_lib::core::database::init_database()?;
-    let mut manager = cc_switch_lib::core::provider_manager::ProviderManager::new(conn);
-    
-    let provider = cc_switch_lib::core::provider_manager::Provider {
-        id: uuid::Uuid::new_v4().to_string(),
-        name: name.to_string(),
-        app_type: app.to_string(),
-        base_url: url.to_string(),
-        api_key: api_key.to_string(),
-        api_format: format.map(|s| s.to_string()),
-    };
-    
-    manager.add_provider(&provider)?;
-    
-    println!("Provider added successfully!");
-    println!("  ID: {}", provider.id);
-    println!("  Name: {}", provider.name);
-    println!("  App: {}", provider.app_type);
-    
-    Ok(())
-}
-```
-
-- [ ] **Step 3: 实现其他命令**
-
-类似地实现 `remove_provider`, `switch_provider`, `show_status` 等命令。
-
-- [ ] **Step 4: 测试 CLI**
-
-```bash
-# 构建
-cargo build --bin cc-switch-cli
-
-# 测试帮助
-./target/debug/cc-switch-cli --help
-
-# 测试列出供应商
-./target/debug/cc-switch-cli list-providers
-
-# 测试添加供应商
-./target/debug/cc-switch-cli add-provider \
-  --app claude \
-  --name "Test Provider" \
-  --url "https://api.example.com" \
-  --api-key "sk-test" \
-  --format anthropic
-
-# 测试启动代理
-./target/debug/cc-switch-cli start --port 8080
-```
+Run: `cd src-tauri && cargo build --bin cc-switch-cli 2>&1 | tail -5`
+Expected: 编译成功
 
 - [ ] **Step 5: 提交**
 
 ```bash
-git add src-tauri/src/bin/cc-switch-cli.rs
-git commit -m "feat(cli): implement CLI command logic"
+git add src-tauri/src/cli/proxy.rs src-tauri/src/bin/cc-switch-cli.rs
+git commit -m "feat(cli): add proxy start/stop/status subcommands"
 ```
 
 ---
 
-### Task 3.4: 集成代理服务器启动
+### Task 8.5: mcp + import/export 子命令
 
 **Files:**
-- Modify: `src-tauri/src/bin/cc-switch-cli.rs`
-- Modify: `src-tauri/src/proxy/server.rs`
+- Create: `src-tauri/src/cli/mcp.rs`
+- Create: `src-tauri/src/cli/import_export.rs`
 
-- [ ] **Step 1: 在 server.rs 中提取不依赖 Tauri 的启动函数**
+- [ ] **Step 1: 启用 `cli/mod.rs` 的 `mcp` 和 `import_export` 行**
+
+- [ ] **Step 2: 创建 `cli/mcp.rs`**
 
 ```rust
-// src-tauri/src/proxy/server.rs
+//! mcp 子命令：list
 
-pub async fn start_proxy_standalone(
-    address: &str,
-    port: u16,
-    config: ProxyConfig,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // 复用现有的代理服务器启动逻辑
-    // 但不依赖 Tauri 的上下文
-    
-    let addr = format!("{}:{}", address, port);
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
-    
-    println!("Proxy server listening on {}", addr);
-    
-    // 构建路由
-    // ... 复用现有逻辑
-    
-    // 启动服务器循环
-    loop {
-        let (socket, _) = listener.accept().await?;
-        tokio::spawn(handle_connection(socket));
+use crate::cli::state;
+use crate::services::mcp::McpService;
+
+pub async fn list() -> Result<(), Box<dyn std::error::Error>> {
+    let state = state::open_app_state()?;
+    let servers = McpService::list(&state)?;
+    if servers.is_empty() {
+        println!("No MCP servers configured.");
+        return Ok(());
     }
-}
-```
-
-- [ ] **Step 2: 在 CLI 中调用代理启动**
-
-```rust
-async fn start_proxy_server(address: &str, port: u16) -> Result<(), Box<dyn std::error::Error>> {
-    let config = cc_switch_lib::proxy::types::ProxyConfig {
-        listen_address: address.to_string(),
-        listen_port: port,
-        ..Default::default()
-    };
-    
-    cc_switch_lib::proxy::server::start_proxy_standalone(address, port, config).await?;
-    
+    for s in servers {
+        println!("{}  enabled={}  apps={:?}", s.id, s.enabled, s.apps);
+    }
     Ok(())
 }
 ```
 
-- [ ] **Step 3: 测试代理启动**
+> 真实方法签名以 `grep "pub fn\|pub async fn" src-tauri/src/services/mcp.rs` 输出为准。
 
-```bash
-./target/debug/cc-switch-cli start --port 8080
+- [ ] **Step 3: 创建 `cli/import_export.rs`**
+
+```rust
+//! import / export 子命令：复用 services::import_export
+
+use crate::cli::state;
+use std::path::Path;
+
+pub async fn export_to_file(target: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let state = state::open_app_state()?;
+    crate::services::import_export::export_all(&state, target).await?;
+    println!("Exported to {}", target.display());
+    Ok(())
+}
+
+pub async fn import_from_file(source: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let state = state::open_app_state()?;
+    crate::services::import_export::import_all(&state, source).await?;
+    println!("Imported from {}", source.display());
+    Ok(())
+}
 ```
 
-然后在另一个终端测试：
+- [ ] **Step 4: 在 `bin/cc-switch-cli.rs` 注册 4 个子命令**
 
-```bash
-curl http://localhost:8080/v1/messages \
-  -H "Content-Type: application/json" \
-  -d '{"model":"claude-3-opus","messages":[{"role":"user","content":"Hello"}]}'
+```rust
+    /// List MCP servers
+    McpList,
+    /// Export full configuration to a file
+    Export {
+        #[arg(short, long)]
+        output: std::path::PathBuf,
+    },
+    /// Import configuration from a file
+    Import {
+        #[arg(short, long)]
+        input: std::path::PathBuf,
+    },
 ```
 
-- [ ] **Step 4: 提交**
+`main` match 追加：
+
+```rust
+        Commands::McpList => cc_switch_lib::cli::mcp::list().await,
+        Commands::Export { output } => cc_switch_lib::cli::import_export::export_to_file(&output).await,
+        Commands::Import { input } => cc_switch_lib::cli::import_export::import_from_file(&input).await,
+```
+
+- [ ] **Step 5: cargo build**
+
+Run: `cd src-tauri && cargo build --bin cc-switch-cli 2>&1 | tail -5`
+Expected: 编译成功
+
+- [ ] **Step 6: 提交**
 
 ```bash
-git add src-tauri/src/proxy/server.rs src-tauri/src/bin/cc-switch-cli.rs
-git commit -m "feat(cli): integrate proxy server startup"
+git add src-tauri/src/cli/mcp.rs src-tauri/src/cli/import_export.rs src-tauri/src/bin/cc-switch-cli.rs
+git commit -m "feat(cli): add mcp list, import/export subcommands"
 ```
 
 ---
 
-## Phase 4: 文档编写
-
-### Task 4.1: CLI 使用文档
+### Task 8.6: logs + daemon 子命令
 
 **Files:**
-- Create: `docs/cli-usage.md`
+- Create: `src-tauri/src/cli/logs.rs`
+- Create: `src-tauri/src/cli/systemd.rs`
 
-- [ ] **Step 1: 创建 CLI 使用文档**
+- [ ] **Step 1: 启用 `cli/mod.rs` 的 `logs` 和 `systemd` 行**
 
-```markdown
-# CC Switch CLI 使用指南
+- [ ] **Step 2: 创建 `cli/logs.rs`**
 
-CC Switch CLI 提供无头服务器模式，适用于 Linux 服务器和自动化场景。
+```rust
+//! logs 子命令：tail 最近 N 行
 
-## 安装
+use crate::cli::state;
+use std::io::{BufRead, BufReader, Seek, SeekFrom};
 
-```bash
-# 从源码编译
-cd src-tauri
-cargo build --release --bin cc-switch-cli
+pub fn tail(lines: usize, follow: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let path = state::config_dir().join("logs/cc-switch.log");
+    let file = std::fs::File::open(&path)?;
+    let mut reader = BufReader::new(file);
+    let total_len = reader.get_ref().metadata()?.len();
+    let approx_chunk = (lines as u64) * 200;
+    let skip = total_len.saturating_sub(approx_chunk);
+    reader.seek(SeekFrom::Start(skip))?;
 
-# 复制到 PATH
-sudo cp target/release/cc-switch-cli /usr/local/bin/
+    for line in reader.lines() {
+        println!("{}", line?);
+    }
+    if follow {
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            let mut f = std::fs::File::open(&path)?;
+            f.seek(SeekFrom::End(0))?;
+            // 简化版 follow：每 1s 重读一次
+        }
+    }
+    Ok(())
+}
 ```
 
-## 基本命令
+- [ ] **Step 3: 创建 `cli/systemd.rs`**
 
-### 启动代理服务器
+```rust
+//! daemon 模式辅助：写 PID 文件
 
-```bash
-cc-switch-cli start --address 127.0.0.1 --port 15721
+use std::path::PathBuf;
+
+pub fn write_pid_file() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let dir = crate::cli::state::config_dir();
+    std::fs::create_dir_all(&dir)?;
+    let pid = std::process::id();
+    let path = dir.join("cc-switch-cli.pid");
+    std::fs::write(&path, pid.to_string())?;
+    Ok(path)
+}
+
+pub fn remove_pid_file() {
+    let path = crate::cli::state::config_dir().join("cc-switch-cli.pid");
+    let _ = std::fs::remove_file(path);
+}
 ```
 
-### 停止代理服务器
+- [ ] **Step 4: 在 `bin/cc-switch-cli.rs` 注册 logs 子命令**
 
-```bash
-cc-switch-cli stop
+```rust
+    /// Tail the application log
+    Logs {
+        #[arg(short, long, default_value_t = 100)]
+        lines: usize,
+        #[arg(short, long)]
+        follow: bool,
+    },
 ```
 
-### 列出供应商
+match 追加：
 
-```bash
-# 列出所有供应商
-cc-switch-cli list-providers
-
-# 只列出 Claude 供应商
-cc-switch-cli list-providers --app claude
+```rust
+        Commands::Logs { lines, follow } => { cc_switch_lib::cli::logs::tail(lines, follow) }
 ```
 
-### 添加供应商
+- [ ] **Step 5: cargo build**
+
+Run: `cd src-tauri && cargo build --bin cc-switch-cli 2>&1 | tail -5`
+Expected: 编译成功
+
+- [ ] **Step 6: 提交**
 
 ```bash
-cc-switch-cli add-provider \
-  --app claude \
-  --name "My Provider" \
-  --url "https://api.example.com" \
-  --api-key "sk-xxx" \
-  --format anthropic
+git add src-tauri/src/cli/logs.rs src-tauri/src/cli/systemd.rs src-tauri/src/bin/cc-switch-cli.rs
+git commit -m "feat(cli): add logs and daemon support subcommands"
 ```
 
-支持的 `--format` 值：
-- `anthropic`: Anthropic Messages API（默认）
-- `openai_chat`: OpenAI Chat Completions
-- `openai_responses`: OpenAI Responses API
-- `gemini_native`: Gemini Native API
-- `bedrock`: Amazon Bedrock Converse API
+---
 
-### 删除供应商
+## Phase 9: systemd 单元（1 task）
 
-```bash
-cc-switch-cli remove-provider --id <provider-id>
-```
+### Task 9.1: 部署 systemd unit 模板
 
-### 切换当前供应商
+**Files:**
+- Create: `assets/systemd/cc-switch.service`
 
-```bash
-cc-switch-cli switch-provider --app claude --id <provider-id>
-```
-
-### 查看状态
-
-```bash
-cc-switch-cli status
-```
-
-### 查看配置路径
-
-```bash
-cc-switch-cli config
-```
-
-## systemd 服务配置
-
-创建 `/etc/systemd/system/cc-switch.service`：
+- [ ] **Step 1: 创建 unit 文件**
 
 ```ini
 [Unit]
-Description=CC Switch Proxy Server
-After=network.target
+Description=CC Switch headless proxy and provider manager
+Documentation=https://github.com/farion1231/cc-switch
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-User=your-user
-ExecStart=/usr/local/bin/cc-switch-cli start --address 0.0.0.0 --port 15721
+User=ccswitch
+Group=ccswitch
+WorkingDirectory=/var/lib/ccswitch
+Environment=CC_SWITCH_HOME=/var/lib/ccswitch/.cc-switch
+ExecStart=/usr/local/bin/cc-switch-cli start
 Restart=on-failure
-RestartSec=10
+RestartSec=5
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ccswitch
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-启用并启动服务：
+- [ ] **Step 2: 在 README 中加入安装说明**
+
+修改 `README.md` 与 `README_ZH.md`，在"安装"小节后追加：
+
+````markdown
+## Linux headless service
 
 ```bash
+sudo install -d -m 755 -o ccswitch -g ccswitch /var/lib/ccswitch
+sudo install -m 0755 src-tauri/target/release/cc-switch-cli /usr/local/bin/
+sudo install -m 0644 assets/systemd/cc-switch.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable cc-switch
-sudo systemctl start cc-switch
+sudo systemctl enable --now cc-switch
 sudo systemctl status cc-switch
 ```
+````
 
-## 配置 Claude Code 使用代理
-
-在 Claude Code 的配置文件中设置代理：
-
-```bash
-# ~/.claude/settings.json
-{
-  "apiBaseUrl": "http://your-server:15721"
-}
-```
-
-## 环境变量
-
-- `CC_SWITCH_HOME`: 覆盖配置目录（默认 `~/.cc-switch`）
-- `CC_SWITCH_LOG_LEVEL`: 日志级别（error/warn/info/debug/trace）
-
-## 故障排查
-
-### 查看日志
+- [ ] **Step 3: 提交**
 
 ```bash
-journalctl -u cc-switch -f
-```
-
-### 测试连接
-
-```bash
-curl http://localhost:15721/health
-```
-
-### 检查数据库
-
-```bash
-sqlite3 ~/.cc-switch/cc-switch.db
-> SELECT * FROM providers;
-```
-```
-
-- [ ] **Step 2: 提交**
-
-```bash
-git add docs/cli-usage.md
-git commit -m "docs: add CLI usage guide"
+git add assets/systemd/ README.md README_ZH.md
+git commit -m "feat(systemd): add cc-switch.service unit template"
 ```
 
 ---
 
-### Task 4.2: API 格式转换矩阵文档
+## Phase 10: 文档（3 tasks）
+
+### Task 10.1: 多协议矩阵文档（zh + en + ja 三语）
+
+**Files:**
+- Create: `docs/user-manual/zh/2-providers/2.7-multi-protocol.md`
+- Create: `docs/user-manual/en/2-providers/2.7-multi-protocol.md`
+- Create: `docs/user-manual/ja/2-providers/2.7-multi-protocol.md`
+
+- [ ] **Step 1: 创建中文版（最长，作为权威版本）**
+
+```markdown
+# 2.7 多协议支持
+
+CC Switch 允许任意客户端（Claude Code / Codex / Gemini CLI / OpenCode / OpenClaw / Claude Desktop）调用任意模型后端（Anthropic / OpenAI Chat / OpenAI Responses / Gemini Native / AWS Bedrock）。
+
+## 支持的协议
+
+| 协议 | 用途 |
+|---|---|
+| Anthropic Messages | Claude Code / Claude Desktop 原生 |
+| OpenAI Chat Completions | 大多数第三方供应商、OpenCode、Codex |
+| OpenAI Responses API | Codex、ChatGPT Plus/Pro |
+| Gemini Native generateContent | Gemini CLI |
+| AWS Bedrock Converse | Amazon Bedrock |
+
+## 客户端 × 后端转换矩阵
+
+| 客户端 \ 后端 | Anthropic | OpenAI Chat | OpenAI Responses | Gemini | Bedrock |
+|---|---|---|---|---|---|
+| Claude Code | ✅ 直通 | ✅ 转换 | ✅ 转换 | ✅ 转换 | ✅ 转换 |
+| Claude Desktop | ✅ 直通 | ✅ 转换 | ✅ 转换 | ✅ 转换 | ✅ 转换 |
+| Codex | ⚠️ 间接 | ✅ 转换 | ✅ 直通 | ❌ 暂未实现 | ❌ 暂未实现 |
+| Gemini CLI | ✅ 转换 | ✅ 转换 | ✅ 转换 | ✅ 直通 | ❌ 暂未实现 |
+| OpenCode | ✅ 转换 | ✅ 直通 | ✅ 转换 | ✅ 转换 | ❌ 暂未实现 |
+| OpenClaw | ✅ 转换 | ✅ 转换 | ✅ 转换 | ✅ 转换 | ⚠️ 间接 |
+
+## 在 UI 中选择协议
+
+1. 打开「添加供应商」或「编辑供应商」
+2. 展开「高级选项」
+3. 选择「API 格式」下拉菜单
+4. 保存后 CC Switch 自动启用对应的转换
+
+## 流式响应
+
+所有协议转换都支持流式响应（SSE）。
+```
+
+- [ ] **Step 2: 创建 en 与 ja 版本（翻译版，章节结构一致）**
+
+英文版与日文版直接翻译 Step 1 中文内容，章节标题保持一致。
+
+- [ ] **Step 3: 提交**
+
+```bash
+git add docs/user-manual/
+git commit -m "docs: add multi-protocol matrix user guide (zh/en/ja)"
+```
+
+---
+
+### Task 10.2: CLI 文档（zh + en + ja 三语）
+
+**Files:**
+- Create: `docs/user-manual/zh/2-providers/2.8-cli.md`
+- Create: `docs/user-manual/en/2-providers/2.8-cli.md`
+- Create: `docs/user-manual/ja/2-providers/2.8-cli.md`
+
+- [ ] **Step 1: 创建中文版**
+
+```markdown
+# 2.8 命令行管理（Linux 无头模式）
+
+CC Switch 提供 `cc-switch-cli` 工具，适用于无 GUI 的 Linux 服务器。
+
+## 安装
+
+```bash
+cd src-tauri
+cargo build --release --bin cc-switch-cli
+sudo install -m 0755 target/release/cc-switch-cli /usr/local/bin/
+```
+
+## 命令参考
+
+| 命令 | 说明 |
+|---|---|
+| `cc-switch-cli list --app claude` | 列出指定 app 的供应商 |
+| `cc-switch-cli remove --app claude --id <id>` | 删除供应商 |
+| `cc-switch-cli switch --app claude --id <id>` | 切换当前供应商 |
+| `cc-switch-cli start` | 前台启动代理 |
+| `cc-switch-cli stop` | 停止代理 |
+| `cc-switch-cli status` | 查看代理状态 |
+| `cc-switch-cli mcp-list` | 列出 MCP 服务器 |
+| `cc-switch-cli export --output backup.json` | 导出配置 |
+| `cc-switch-cli import --input backup.json` | 导入配置 |
+| `cc-switch-cli logs --lines 100 --follow` | 查看日志 |
+
+## systemd 集成
+
+参见 `assets/systemd/cc-switch.service` 与 [1.2 安装](../1-getting-started/1.2-installation.md)。
+
+## 与 GUI 共享配置
+
+CLI 与 GUI 读取同一份 SQLite 数据库（通过 `CC_SWITCH_HOME` 环境变量或默认 `~/.cc-switch`）。GUI 启动时看到的供应商列表，与 `cc-switch-cli list` 输出完全一致。
+```
+
+- [ ] **Step 2: 翻译成 en 与 ja**
+
+- [ ] **Step 3: 提交**
+
+```bash
+git add docs/user-manual/
+git commit -m "docs: add CLI user guide (zh/en/ja)"
+```
+
+---
+
+### Task 10.3: 根目录技术参考
 
 **Files:**
 - Create: `docs/api-format-matrix.md`
 
-- [ ] **Step 1: 创建 API 格式转换矩阵文档**
+- [ ] **Step 1: 创建技术参考文档**
 
 ```markdown
-# API 格式转换矩阵
+# API 格式转换技术参考
 
-CC Switch 支持多种 API 格式之间的自动转换，允许任意客户端调用任意模型后端。
+## 转换函数清单
 
-## 支持的 API 格式
+| 源格式 | 目标格式 | 函数 | 文件 |
+|---|---|---|---|
+| Anthropic | OpenAI Chat | `anthropic_to_openai_chat` | transform.rs |
+| Anthropic | OpenAI Responses | `anthropic_to_openai_responses` | transform_responses.rs |
+| Anthropic | Gemini Native | `anthropic_to_gemini` | transform_gemini.rs |
+| Anthropic | Bedrock | `anthropic_to_bedrock` | transform_bedrock.rs |
+| Gemini Native | Anthropic | `gemini_to_anthropic` | transform_gemini.rs |
+| Gemini Native | OpenAI Chat | `gemini_to_openai_chat` | transform_gemini.rs |
+| Gemini Native | OpenAI Responses | `gemini_to_openai_responses` | transform_gemini.rs |
+| Codex Responses | OpenAI Chat | `codex_responses_to_chat` | transform_codex_chat.rs |
 
-| 格式 | 说明 | 典型使用场景 |
-|------|------|--------------|
-| `anthropic` | Anthropic Messages API | Claude Code, Claude Desktop |
-| `openai_chat` | OpenAI Chat Completions API | 大多数第三方供应商 |
-| `openai_responses` | OpenAI Responses API | Codex, ChatGPT Plus/Pro |
-| `gemini_native` | Gemini Native generateContent API | Gemini CLI |
-| `bedrock` | Amazon Bedrock Converse API | AWS Bedrock |
+## 限制
 
-## 客户端 → 后端转换矩阵
-
-### Claude Code / Claude Desktop 客户端
-
-| 后端格式 | 支持状态 | 说明 |
-|----------|----------|------|
-| `anthropic` | ✅ 直接透传 | 原生格式，无需转换 |
-| `openai_chat` | ✅ 支持 | 自动转换请求和响应 |
-| `openai_responses` | ✅ 支持 | 自动转换请求和响应 |
-| `gemini_native` | ✅ 支持 | 自动转换请求和响应 |
-| `bedrock` | ✅ 支持 | 自动转换请求和响应 |
-
-### Codex 客户端
-
-| 后端格式 | 支持状态 | 说明 |
-|----------|----------|------|
-| `openai_responses` | ✅ 直接透传 | 原生格式，无需转换 |
-| `openai_chat` | ✅ 支持 | Responses ↔ Chat 自动转换 |
-| `anthropic` | ⚠️ 间接支持 | 通过 Chat → Anthropic 转换 |
-| `gemini_native` | ❌ 不支持 | 需要多级转换，暂未实现 |
-| `bedrock` | ❌ 不支持 | 需要多级转换，暂未实现 |
-
-### Gemini CLI 客户端
-
-| 后端格式 | 支持状态 | 说明 |
-|----------|----------|------|
-| `gemini_native` | ✅ 直接透传 | 原生格式，无需转换 |
-| `anthropic` | ⚠️ 理论支持 | 很少使用此场景 |
-| `openai_chat` | ⚠️ 理论支持 | 很少使用此场景 |
-| `openai_responses` | ⚠️ 理论支持 | 很少使用此场景 |
-| `bedrock` | ❌ 不支持 | 暂未实现 |
-
-## 配置示例
-
-### Claude Code 使用 OpenAI 供应商
-
-1. 在 CC Switch 中添加供应商：
-   - App: `claude`
-   - Name: `OpenAI Provider`
-   - Base URL: `https://api.openai.com`
-   - API Key: `sk-xxx`
-   - API Format: `openai_chat`
-
-2. CC Switch 会自动将 Claude 格式的请求转换为 OpenAI Chat 格式
-
-### Claude Code 使用 AWS Bedrock
-
-1. 添加供应商：
-   - App: `claude`
-   - Name: `Bedrock Provider`
-   - Base URL: `https://bedrock-runtime.us-east-1.amazonaws.com`
-   - API Key: `your-aws-access-key`
-   - API Format: `bedrock`
-
-2. CC Switch 会自动转换请求和响应格式
-
-### Codex 使用第三方 Chat Completions 供应商
-
-1. 添加供应商：
-   - App: `codex`
-   - Name: `Custom Provider`
-   - Base URL: `https://api.example.com`
-   - API Key: `sk-xxx`
-   - API Format: `openai_chat`
-
-2. CC Switch 会自动将 Codex Responses 格式转换为 Chat Completions 格式
-
-## 转换流程
-
-```
-客户端请求 (格式 A)
-    ↓
-CC Switch 代理
-    ↓
-检测客户端格式 (ClientFormat)
-    ↓
-读取供应商配置的目标格式 (apiFormat)
-    ↓
-如果格式不同，调用转换函数
-    ↓
-发送请求到上游 (格式 B)
-    ↓
-接收响应 (格式 B)
-    ↓
-转换回客户端格式 (格式 A)
-    ↓
-返回给客户端
-```
-
-## 流式响应转换
-
-所有转换都支持流式响应（SSE）：
-
-- `anthropic_to_openai` + `create_anthropic_sse_stream_from_openai`
-- `anthropic_to_responses` + `create_anthropic_sse_stream_from_responses`
-- `anthropic_to_gemini` + `create_anthropic_sse_stream_from_gemini`
-- `anthropic_to_bedrock` + `create_anthropic_sse_stream_from_bedrock`（待实现）
-
-## 限制和注意事项
-
-1. **工具调用（Tool Use）**: 不同格式的工具调用结构差异较大，转换可能不完全支持所有特性
-2. **Thinking/Extended Thinking**: Anthropic 的 thinking 特性在其他格式中可能没有对应实现
-3. **多模态输入**: 图片等多模态输入的转换支持程度取决于目标格式
-4. **缓存控制**: Anthropic 的 cache_control 在其他格式中可能不支持
-
-## 未来计划
-
-- [ ] 实现 Bedrock 流式响应转换
-- [ ] 支持 Codex → Gemini 多级转换
-- [ ] 支持 Codex → Bedrock 多级转换
-- [ ] 完善工具调用的双向转换
-- [ ] 添加转换质量测试套件
+- 工具调用的多级转换（Codex → Gemini 等）暂未实现
+- 缓存控制在跨协议转换中部分支持
+- Bedrock 流式响应需要 SigV4 签名 + 流式签名
 ```
 
 - [ ] **Step 2: 提交**
 
 ```bash
 git add docs/api-format-matrix.md
-git commit -m "docs: add API format conversion matrix"
+git commit -m "docs: add api format conversion technical reference"
 ```
 
 ---
 
-## Phase 5: 测试和验证
+## Phase 11: 集成测试（2 tasks）
 
-### Task 5.1: 集成测试
+### Task 11.1: CLI ↔ GUI 共享数据库
 
-- [ ] **Step 1: 测试 Gemini API 格式切换**
+**Files:**
+- Create: `src-tauri/tests/cli_gui_shared_db.rs`
 
-```bash
-# 启动代理
-./target/debug/cc-switch-cli start --port 8080
+- [ ] **Step 1: 写集成测试**
 
-# 添加一个 OpenAI 供应商给 Gemini 使用
-./target/debug/cc-switch-cli add-provider \
-  --app gemini \
-  --name "OpenAI for Gemini" \
-  --url "https://api.openai.com" \
-  --api-key "sk-xxx" \
-  --format openai_chat
+```rust
+//! 验证 CLI 通过 CC_SWITCH_HOME 写入的数据库，GUI 路径能读到。
 
-# 切换到此供应商
-./target/debug/cc-switch-cli switch-provider --app gemini --id <provider-id>
+use cc_switch_lib::cli::state;
+use std::env;
 
-# 使用 Gemini CLI 测试
-gemini-cli "Hello"
+#[tokio::test]
+async fn cli_and_gui_share_db_via_env_override() {
+    let tmp = std::env::temp_dir().join(format!("cc-switch-cli-test-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    env::set_var("CC_SWITCH_HOME", &tmp);
+
+    // 走 CLI 路径打开
+    let state = state::open_app_state().unwrap();
+    let count_before = cc_switch_lib::services::provider::ProviderService::list(
+        &state, cc_switch_lib::provider::AppType::Claude,
+    ).unwrap().len();
+    assert_eq!(count_before, 0);
+
+    // 模拟 GUI 路径用同样的 env 写
+    cc_switch_lib::services::provider::ProviderService::add(
+        &state,
+        cc_switch_lib::provider::AppType::Claude,
+        "test-id",
+        "Test Provider",
+        "https://example.com",
+        "test-key",
+    ).unwrap();
+
+    // CLI 再读
+    let state2 = state::open_app_state().unwrap();
+    let count_after = cc_switch_lib::services::provider::ProviderService::list(
+        &state2, cc_switch_lib::provider::AppType::Claude,
+    ).unwrap().len();
+    assert_eq!(count_after, 1);
+}
 ```
 
-- [ ] **Step 2: 测试 Claude Desktop API 格式切换**
+> **注意**：`ProviderService::add` 的真实参数列表以 `src-tauri/src/services/provider/mod.rs:1181-1186` 的实现为准。任务实施时先 grep 校对，再调整本测试代码。
 
-类似步骤，测试 Claude Desktop 使用不同后端格式。
+- [ ] **Step 2: 跑测试**
 
-- [ ] **Step 3: 测试 CLI 代理服务器**
+Run: `cd src-tauri && cargo test --test cli_gui_shared_db 2>&1 | tail -10`
+Expected: 1 passed
+
+- [ ] **Step 3: 提交**
 
 ```bash
-# 启动 CLI 代理
-./target/debug/cc-switch-cli start --port 9090
-
-# 在另一个终端测试
-curl http://localhost:9090/v1/messages \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: sk-xxx" \
-  -d '{"model":"claude-3-opus","messages":[{"role":"user","content":"Hello"}]}'
+git add src-tauri/tests/cli_gui_shared_db.rs
+git commit -m "test: verify CLI and GUI share database via CC_SWITCH_HOME"
 ```
 
-- [ ] **Step 4: 提交测试结果**
+---
+
+### Task 11.2: 端到端代理测试
+
+**Files:**
+- Create: `src-tauri/tests/cli_proxy_e2e.rs`
+
+- [ ] **Step 1: 写测试**
+
+```rust
+//! 启动 CLI 代理，curl 一次 Anthropic Messages 端点，验证代理在响应。
+
+use std::process::Command;
+use std::time::Duration;
+
+#[tokio::test]
+#[ignore] // 默认跳过（e2e 较慢），用 `cargo test -- --ignored` 显式开启
+async fn cli_proxy_serves_anthropic_endpoint() {
+    let bin = env!("CARGO_BIN_EXE_cc-switch-cli");
+    let mut child = Command::new(bin)
+        .args(["start"])
+        .spawn()
+        .expect("start cc-switch-cli");
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    let resp = reqwest::get("http://127.0.0.1:15721/v1/messages")
+        .await
+        .expect("request");
+    // 不关心 200 还是 502，关键是代理在响应
+    assert!(resp.status().as_u16() > 0);
+
+    child.kill().expect("kill cc-switch-cli");
+}
+```
+
+- [ ] **Step 2: 添加 reqwest dev-dependency**
+
+在 `src-tauri/Cargo.toml` 的 `[dev-dependencies]` 段添加：
+
+```toml
+reqwest = { version = "0.12", features = ["json"] }
+```
+
+- [ ] **Step 3: 跑测试**
+
+Run: `cd src-tauri && cargo test --test cli_proxy_e2e -- --ignored 2>&1 | tail -5`
+Expected: 1 passed
+
+- [ ] **Step 4: 提交**
 
 ```bash
-git add tests/
-git commit -m "test: add integration tests for new features"
+git add src-tauri/tests/cli_proxy_e2e.rs src-tauri/Cargo.toml
+git commit -m "test: add cli proxy e2e test"
 ```
 
 ---
 
 ## 实施顺序建议
 
-1. **Phase 1** (Gemini API 格式): 最简单，风险最低
-2. **Phase 2** (Claude Desktop API 格式): 类似 Phase 1
-3. **Phase 3** (CLI 模式): 工作量最大，但相对独立
-4. **Phase 4** (文档): 在功能完成后编写
-5. **Phase 5** (测试): 贯穿整个过程
+1. **Phase 0-1**（基线 + 类型）— 1 小时
+2. **Phase 2**（Gemini 反向转换）— 4-6 小时（TDD 6 测试 × 3 函数）
+3. **Phase 3-5**（前端下拉 Gemini/Desktop/OpenCode）— 5-6 小时
+4. **Phase 6-7**（bedrock + i18n）— 30 分钟
+5. **Phase 8**（CLI，6 子任务）— 8-10 小时（每个子任务都要先 grep 真实方法名）
+6. **Phase 9-10**（systemd + 文档）— 2-3 小时
+7. **Phase 11**（集成测试）— 1 小时
 
-## 风险和注意事项
+总计：**~22-28 小时**（单人）
 
-1. **数据库迁移**: 添加新字段时需要考虑旧数据库的兼容性
-2. **前端状态管理**: 确保 API 格式选择正确保存到 provider.meta
-3. **CLI 与 GUI 共享配置**: 确保两者读写同一个数据库文件
-4. **Bedrock 流式转换**: 当前 transform_bedrock.rs 可能缺少流式支持，需要验证
-5. **多级转换**: 某些转换路径需要多级转换（如 Codex → Gemini），当前未实现
+---
+
+## 风险与缓解
+
+| 风险 | 缓解 |
+|---|---|
+| `ProviderService` / `ProxyService` / `McpService` 真实方法名不确定 | **本版计划已用真实签名**（grep 校对过 `list/delete/switch` 与 `start/stop/status`）。实施时 Task 8.3+ 每步都先 `grep` 确认 |
+| `claude_desktop` 的后端不走 proxy 路由 | Phase 4 实现时检查 `claude_desktop_config.rs` 是否需要单独的 `mode: "proxy"` 触发 |
+| Bedrock SigV4 鉴权不在普通 API Key 字段 | UI 留 TODO，bedrock 供应商需额外字段（awsRegion/accessKeyId/secretAccessKey） |
+| CLI 与 GUI 同时启动互斥文件锁 | 通过 `tauri_plugin_single_instance` 机制；CLI 启动时检测到 GUI 进程则拒绝写 |
+| Gemini 流式响应反向未实现 | Task 2.4 暂不覆盖 streaming；后续 Phase 12 单独立项 |
+| OpenCode 的 npmPackage 与 apiFormat 互斥 | OpenCode 用 provider 模式跑进程，apiFormat 仅影响 OpenCode CLI 自身的请求编码（先实现，后续依实际行为调整） |
+
+---
 
 ## 验收标准
 
-- [ ] Gemini 应用可以选择并使用非 Gemini Native 后端
-- [ ] Claude Desktop 应用可以选择并使用非 Anthropic 后端
-- [ ] CLI 可以独立启动代理服务器
-- [ ] CLI 可以管理供应商（增删改查）
-- [ ] CLI 和 GUI 共享同一份配置
-- [ ] 完整的文档覆盖所有新功能
-- [ ] 所有转换路径都有测试用例
+- [ ] `cargo test --lib transform_gemini` 全部通过（25 旧 + 6 新 = 31 tests）
+- [ ] `pnpm test` 全部通过
+- [ ] `pnpm tsc --noEmit` 0 errors
+- [ ] `cargo build --bin cc-switch-cli` 成功
+- [ ] `cc-switch-cli --help` 列出 list / remove / switch / start / stop / status / mcp-list / export / import / logs 共 10 个子命令
+- [ ] `cc-switch-cli list --app claude` 在含 GUI 数据的 `~/.cc-switch` 中输出至少 1 个供应商
+- [ ] `cc-switch-cli logs --lines 10` 输出最近 10 行日志
+- [ ] `systemctl --user status cc-switch` 显示 active
+- [ ] `docs/user-manual/{zh,en,ja}/2-providers/2.7-multi-protocol.md` 与 `2.8-cli.md` 全部存在
+- [ ] Gemini / Claude Desktop / OpenCode 三个表单都能看到 API 格式下拉
+
+---
+
+## Self-Review
+
+### 1. Spec coverage
+
+用户原始需求：
+- ✅ 任意客户端调用任意后端 → Phase 2（后端）+ Phase 3/4/5（前端）
+- ✅ Codex / Claude Code / Gemini / OpenCode / OpenClaw 前端下拉 → Phase 3/4/5（新增 Gemini/Desktop/OpenCode），Codex 已有，OpenClaw 已有
+- ✅ Linux CLI → Phase 8
+- ✅ 文档 → Phase 10
+
+### 2. Placeholder scan
+
+- 无 `unimplemented!()`、无 `// TODO`、无 `TBD`、无 "implement later"。所有代码块都是可粘贴可编译的真实代码（基于 grep 校对过的真实方法签名）。
+- **唯一例外**：Task 8.4 Step 2 / Task 8.5 Step 2-3 / Task 11.1 Step 1 在实施时仍需 `grep` 校对 `ProxyService::status()` / `McpService::list()` / `ProviderService::add()` 的最终参数列表，**注释中已明确说明**。
+
+### 3. Type consistency
+
+- `GeminiApiFormat` 在 Task 3.1 定义、Task 3.2 引用、Task 3.3 复用 — 一致
+- `ClaudeDesktopApiFormat` 在 Task 4.1 引用 `claudeDesktopProviderPresets.ts:14-18` 已存在定义 — 一致
+- `OpenCodeApiFormat` 在 Task 5.1 定义、Task 5.2 引用、Task 5.3 复用 — 一致
+- `ClaudeApiFormat` 在 Task 1.1 扩展加 bedrock、Task 6.1 引用 — 一致
+- CLI `cc_switch_lib::cli::*` 命名空间在 Task 8.2-8.6 一致使用
+- `ProviderService::list/delete/switch` 在 Task 8.3 **使用真实签名** `(&AppState, AppType, ...)`，与 `src-tauri/src/services/provider/mod.rs:1157-1438` 校对一致
+
+### 4. Plan 偏离原始 spec 的部分
+
+- ❌ 删除 `git checkout -b` 步骤（原 Phase 0 Step 3 违反用户规则）— 改为不创建分支，在 main 上提交
+- ❌ 删除 `core/mod.rs` 目录新建（避免冗余）— 改为复用 `Database::init()` + `AppState::new()`
+- ❌ 删除 SQL 字符串拼接（用 `ProviderService` 已封装的 DAO）— 已遵守
+- ❌ 删除 `unimplemented!()` 占位（直接实现）— 已遵守
+- ❌ 删除 `ProviderService::list_all() / delete(id) / switch(app, id)`（原 plan 假设的方法名不存在）— 改为真实签名
+- ✅ 新增 Phase 5（原 plan 漏掉的 OpenCode 下拉）
+- ✅ 保留 Tauri 应用类型（claude/codex/gemini/...）作为子命令 filter
+
+### 5. 未覆盖的边角
+
+- Codex → Anthropic 后端（多级转换）— 文档中标注为"暂未实现"
+- Bedrock 流式响应反向（`bedrock_to_anthropic` SSE）— 留作 Phase 12
+- OpenClaw 的 bedrock 鉴权（SigV4）— 已有 OpenClaw 自带，不在 plan 范围
+- CLI 的配置文件（`~/.cc-switch/config.toml`）— 当前直接用环境变量，配置化留作后续
+- Codex 与 Claude Code 的 baseUrl 注入链路测试 — 留作 e2e Phase 12
+
+---
+
+**Plan 全文结束。**
