@@ -189,9 +189,6 @@ export function useGeminiCommonConfig({
                 }
                 // 清理 localStorage
                 window.localStorage.removeItem(LEGACY_STORAGE_KEY);
-                console.log(
-                  "[迁移] Gemini 通用配置已从 localStorage 迁移到 config.json",
-                );
               }
             } catch (e) {
               console.warn("[迁移] 从 localStorage 迁移失败:", e);
