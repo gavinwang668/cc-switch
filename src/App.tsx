@@ -57,6 +57,7 @@ import {
   DRAG_REGION_ATTR,
   DRAG_REGION_STYLE,
 } from "@/lib/platform";
+import { useAppRouter } from "@/hooks/useAppRouter";
 import { AppSwitcher } from "@/components/AppSwitcher";
 import { ProviderList } from "@/components/providers/ProviderList";
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
@@ -91,22 +92,6 @@ import AgentsDefaultsPanel from "@/components/openclaw/AgentsDefaultsPanel";
 import OpenClawHealthBanner from "@/components/openclaw/OpenClawHealthBanner";
 import HermesMemoryPanel from "@/components/hermes/HermesMemoryPanel";
 
-type View =
-  | "providers"
-  | "settings"
-  | "prompts"
-  | "skills"
-  | "skillsDiscovery"
-  | "mcp"
-  | "agents"
-  | "universal"
-  | "sessions"
-  | "workspace"
-  | "openclawEnv"
-  | "openclawTools"
-  | "openclawAgents"
-  | "hermesMemory";
-
 interface SyncStatusUpdatedPayload {
   source?: string;
   status?: string;
@@ -135,47 +120,16 @@ const getInitialApp = (): AppId => {
   return "claude";
 };
 
-const VIEW_STORAGE_KEY = "cc-switch-last-view";
-const VALID_VIEWS: View[] = [
-  "providers",
-  "settings",
-  "prompts",
-  "skills",
-  "skillsDiscovery",
-  "mcp",
-  "agents",
-  "universal",
-  "sessions",
-  "workspace",
-  "openclawEnv",
-  "openclawTools",
-  "openclawAgents",
-  "hermesMemory",
-];
-
-const getInitialView = (): View => {
-  const saved = localStorage.getItem(VIEW_STORAGE_KEY) as View | null;
-  if (saved && VALID_VIEWS.includes(saved)) {
-    return saved;
-  }
-  return "providers";
-};
-
 function App() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { currentView, navigate, settingsDefaultTab, setSettingsDefaultTab } = useAppRouter();
 
   const [activeApp, setActiveApp] = useState<AppId>(getInitialApp);
   const sharedFeatureApp: AppId =
     activeApp === "claude-desktop" ? "claude" : activeApp;
-  const [currentView, setCurrentView] = useState<View>(getInitialView);
-  const [settingsDefaultTab, setSettingsDefaultTab] = useState("general");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
-
-  useEffect(() => {
-    localStorage.setItem(VIEW_STORAGE_KEY, currentView);
-  }, [currentView]);
 
   const { data: settingsData } = useSettingsQuery();
   const useAppWindowControls =
@@ -220,7 +174,7 @@ function App() {
       sharedFeatureApp !== "gemini" &&
       sharedFeatureApp !== "hermes"
     ) {
-      setCurrentView("providers");
+      navigate("providers");
     }
   }, [sharedFeatureApp, currentView]);
 
@@ -572,7 +526,7 @@ function App() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "," && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
-        setCurrentView("settings");
+        navigate("settings");
         return;
       }
 
@@ -586,7 +540,7 @@ function App() {
       if (isTextEditableTarget(event.target)) return;
 
       event.preventDefault();
-      setCurrentView(view === "skillsDiscovery" ? "skills" : "providers");
+      navigate(view === "skillsDiscovery" ? "skills" : "providers");
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -864,7 +818,7 @@ function App() {
           return (
             <SettingsPage
               open={true}
-              onOpenChange={() => setCurrentView("providers")}
+              onOpenChange={() => navigate("providers")}
               onImportSuccess={handleImportSuccess}
               defaultTab={settingsDefaultTab}
             />
@@ -874,7 +828,7 @@ function App() {
             <PromptPanel
               ref={promptPanelRef}
               open={true}
-              onOpenChange={() => setCurrentView("providers")}
+              onOpenChange={() => navigate("providers")}
               appId={sharedFeatureApp}
             />
           );
@@ -884,7 +838,7 @@ function App() {
           return (
             <UnifiedSkillsPanel
               ref={unifiedSkillsPanelRef}
-              onOpenDiscovery={() => setCurrentView("skillsDiscovery")}
+              onOpenDiscovery={() => navigate("skillsDiscovery")}
               currentApp={
                 sharedFeatureApp === "openclaw" ? "claude" : sharedFeatureApp
               }
@@ -903,12 +857,12 @@ function App() {
           return (
             <UnifiedMcpPanel
               ref={mcpPanelRef}
-              onOpenChange={() => setCurrentView("providers")}
+              onOpenChange={() => navigate("providers")}
             />
           );
         case "agents":
           return (
-            <AgentsPanel onOpenChange={() => setCurrentView("providers")} />
+            <AgentsPanel onOpenChange={() => navigate("providers")} />
           );
         case "universal":
           return (
@@ -1123,7 +1077,7 @@ function App() {
                   variant="outline"
                   size="icon"
                   onClick={() =>
-                    setCurrentView(
+                    navigate(
                       currentView === "skillsDiscovery"
                         ? "skills"
                         : "providers",
@@ -1178,7 +1132,7 @@ function App() {
                   size="icon"
                   onClick={() => {
                     setSettingsDefaultTab("general");
-                    setCurrentView("settings");
+                    navigate("settings");
                   }}
                   title={t("common.settings")}
                   className="hover:bg-black/5 dark:hover:bg-white/5"
@@ -1188,7 +1142,7 @@ function App() {
                 <UpdateBadge
                   onClick={() => {
                     setSettingsDefaultTab("about");
-                    setCurrentView("settings");
+                    navigate("settings");
                   }}
                 />
                 {isCurrentAppTakeoverActive && (
@@ -1197,7 +1151,7 @@ function App() {
                     size="icon"
                     onClick={() => {
                       setSettingsDefaultTab("usage");
-                      setCurrentView("settings");
+                      navigate("settings");
                     }}
                     title={t("usage.title", {
                       defaultValue: "使用统计",
@@ -1312,7 +1266,7 @@ function App() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setCurrentView("skillsDiscovery")}
+                      onClick={() => navigate("skillsDiscovery")}
                       className="hover:bg-black/5 dark:hover:bg-white/5"
                     >
                       <Search className="w-4 h-4 mr-2" />
@@ -1372,7 +1326,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCurrentView("skills")}
+                                onClick={() => navigate("skills")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("skills.manage")}
                               >
@@ -1381,7 +1335,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCurrentView("hermesMemory")}
+                                onClick={() => navigate("hermesMemory")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("hermes.memory.title")}
                               >
@@ -1399,7 +1353,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCurrentView("mcp")}
+                                onClick={() => navigate("mcp")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("mcp.title")}
                               >
@@ -1411,7 +1365,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCurrentView("workspace")}
+                                onClick={() => navigate("workspace")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("workspace.manage")}
                               >
@@ -1420,7 +1374,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCurrentView("openclawEnv")}
+                                onClick={() => navigate("openclawEnv")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("openclaw.env.title")}
                               >
@@ -1429,7 +1383,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCurrentView("openclawTools")}
+                                onClick={() => navigate("openclawTools")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("openclaw.tools.title")}
                               >
@@ -1438,7 +1392,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCurrentView("openclawAgents")}
+                                onClick={() => navigate("openclawAgents")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("openclaw.agents.title")}
                               >
@@ -1447,7 +1401,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCurrentView("sessions")}
+                                onClick={() => navigate("sessions")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("sessionManager.title")}
                               >
@@ -1459,7 +1413,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCurrentView("skills")}
+                                onClick={() => navigate("skills")}
                                 className={cn(
                                   "text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5",
                                   "transition-all duration-200 ease-in-out overflow-hidden",
@@ -1474,7 +1428,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCurrentView("prompts")}
+                                onClick={() => navigate("prompts")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("prompts.manage")}
                               >
@@ -1483,7 +1437,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCurrentView("sessions")}
+                                onClick={() => navigate("sessions")}
                                 className={cn(
                                   "text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5",
                                   "transition-all duration-200 ease-in-out overflow-hidden",
@@ -1498,7 +1452,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCurrentView("mcp")}
+                                onClick={() => navigate("mcp")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("mcp.title")}
                               >
