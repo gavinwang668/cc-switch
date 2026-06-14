@@ -1,28 +1,43 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
-import en from "./locales/en.json";
-import ja from "./locales/ja.json";
-import zh from "./locales/zh.json";
-import zhTW from "./locales/zh-TW.json";
-
 type Language = "zh" | "zh-TW" | "en" | "ja";
 
+const SUPPORTED_LANGUAGES: Language[] = ["zh", "zh-TW", "en", "ja"];
 const DEFAULT_LANGUAGE: Language = "zh";
+
+/**
+ * 懒加载语言包。Vite 会将每个 `import()` 拆分为独立 chunk，
+ * 启动时不再解析全部四份翻译。
+ */
+const localeLoaders: Record<Language, () => Promise<{ default: Record<string, unknown> }>> = {
+  en: () => import("./locales/en.json"),
+  ja: () => import("./locales/ja.json"),
+  zh: () => import("./locales/zh.json"),
+  "zh-TW": () => import("./locales/zh-TW.json"),
+};
+
+const loadedLanguages = new Set<Language>();
+
+async function loadLanguage(language: Language) {
+  if (loadedLanguages.has(language)) return;
+  const loader = localeLoaders[language];
+  if (!loader) return;
+  const module = await loader();
+  i18n.addResourceBundle(language, "translation", module.default, true, true);
+  loadedLanguages.add(language);
+}
 
 const getInitialLanguage = (): Language => {
   if (typeof window !== "undefined") {
     try {
       const stored = window.localStorage.getItem("language");
-      if (
-        stored === "zh" ||
-        stored === "zh-TW" ||
-        stored === "en" ||
-        stored === "ja"
-      ) {
-        return stored;
+      if ((SUPPORTED_LANGUAGES as string[]).includes(stored ?? "")) {
+        return stored as Language;
       }
     } catch (error) {
+      // 静默失败即可
+      // eslint-disable-next-line no-console
       console.warn("[i18n] Failed to read stored language preference", error);
     }
   }
@@ -33,10 +48,7 @@ const getInitialLanguage = (): Language => {
         navigator.languages?.[0]?.toLowerCase())
       : undefined;
 
-  if (navigatorLang === "zh") {
-    return "zh";
-  }
-
+  if (navigatorLang === "zh") return "zh";
   if (
     navigatorLang?.startsWith("zh-tw") ||
     navigatorLang?.startsWith("zh-hk") ||
@@ -45,48 +57,51 @@ const getInitialLanguage = (): Language => {
   ) {
     return "zh-TW";
   }
-
-  if (navigatorLang?.startsWith("zh")) {
-    return "zh";
-  }
-
-  if (navigatorLang?.startsWith("ja")) {
-    return "ja";
-  }
-
-  if (navigatorLang?.startsWith("en")) {
-    return "en";
-  }
+  if (navigatorLang?.startsWith("zh")) return "zh";
+  if (navigatorLang?.startsWith("ja")) return "ja";
+  if (navigatorLang?.startsWith("en")) return "en";
 
   return DEFAULT_LANGUAGE;
 };
 
-const resources = {
-  en: {
-    translation: en,
-  },
-  ja: {
-    translation: ja,
-  },
-  zh: {
-    translation: zh,
-  },
-  "zh-TW": {
-    translation: zhTW,
-  },
-};
-
 i18n.use(initReactI18next).init({
-  resources,
-  lng: getInitialLanguage(), // 根据本地存储或系统语言选择默认语言
-  fallbackLng: "en", // 如果缺少中文翻译则退回英文
-
+  // 资源不再在这里传，让首次切换语言时通过 backend 钩子动态加载
+  resources: {},
+  lng: getInitialLanguage(),
+  fallbackLng: "en",
+  supportedLngs: SUPPORTED_LANGUAGES,
   interpolation: {
-    escapeValue: false, // React 已经默认转义
+    escapeValue: false,
   },
-
-  // 开发模式下显示调试信息
   debug: false,
+  // 强制 react-i18next 等待资源加载完成，避免首次渲染时 key 全部回退
+  react: {
+    useSuspense: false,
+  },
+  // 自定义资源加载：i18next 在切换语言、初始化或缺失翻译时回调本函数
+  partialBundledLanguages: true,
 });
 
+// 资源加载逻辑通过 languageChanged / missingKey 事件接管
+
+i18n.on("languageChanged", (language) => {
+  if ((SUPPORTED_LANGUAGES as string[]).includes(language)) {
+    void loadLanguage(language as Language);
+  }
+});
+
+void loadLanguage(getInitialLanguage());
+
+// 兜底：当翻译缺失时尝试加载目标语言资源
+i18n.on("missingKey", (lngs) => {
+  const list = Array.isArray(lngs) ? lngs : [lngs];
+  for (const lng of list) {
+    if ((SUPPORTED_LANGUAGES as string[]).includes(lng)) {
+      void loadLanguage(lng as Language);
+    }
+  }
+});
+
+export { loadLanguage, SUPPORTED_LANGUAGES };
+export type { Language };
 export default i18n;
