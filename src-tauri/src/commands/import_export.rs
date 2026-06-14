@@ -77,6 +77,23 @@ pub async fn sync_current_providers_live(state: State<'_, AppState>) -> Result<V
 
 // ─── File dialogs ────────────────────────────────────────────
 
+/// 写入文本到指定文件路径（用于会话导出等场景）
+#[tauri::command]
+pub async fn write_text_file(
+    #[allow(non_snake_case)] filePath: String,
+    #[allow(non_snake_case)] content: String,
+) -> Result<String, String> {
+    let target = PathBuf::from(&filePath);
+    if let Some(parent) = target.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {e}"))?;
+        }
+    }
+    std::fs::write(&target, content.as_bytes())
+        .map_err(|e| format!("写入文件失败: {e}"))?;
+    Ok(filePath)
+}
+
 /// 保存文件对话框
 #[tauri::command]
 pub async fn save_file_dialog<R: tauri::Runtime>(

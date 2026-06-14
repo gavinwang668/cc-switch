@@ -1243,6 +1243,7 @@ pub fn run() {
             commands::rename_db_backup,
             commands::delete_db_backup,
             commands::sync_current_providers_live,
+            commands::write_text_file,
             // Deep link import
             commands::parse_deeplink,
             commands::merge_deeplink_config,

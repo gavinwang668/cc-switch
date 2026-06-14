@@ -15,6 +15,7 @@ import {
   FolderOpen,
   X,
   CheckSquare,
+  Download,
 } from "lucide-react";
 import {
   useDeleteSessionMutation,
@@ -47,6 +48,7 @@ import { ProviderIcon } from "@/components/ProviderIcon";
 import { SessionItem } from "./SessionItem";
 import { SessionMessageItem } from "./SessionMessageItem";
 import { SessionTocDialog, SessionTocSidebar } from "./SessionToc";
+import { SessionExportDialog } from "./SessionExportDialog";
 import {
   extractCodexPromptPreview,
   formatSessionMessagePreview,
@@ -88,6 +90,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   );
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const [search, setSearch] = useState("");
@@ -696,6 +699,35 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                           </TooltipTrigger>
                           <TooltipContent>{t("common.refresh")}</TooltipContent>
                         </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7"
+                              onClick={() => setExportDialogOpen(true)}
+                              disabled={selectedDeletableSessions.length === 0}
+                              aria-label={t("sessionExport.title", {
+                                defaultValue: "导出会话",
+                              })}
+                            >
+                              <Download className="size-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {selectedDeletableSessions.length === 0
+                              ? t("sessionExport.tooltipNoSelection", {
+                                  defaultValue:
+                                    "请先勾选要导出的会话（需可读取的会话）",
+                                })
+                              : t("sessionExport.tooltipWithSelection", {
+                                  defaultValue:
+                                    "导出已选择的 {{count}} 个会话",
+                                  count: selectedDeletableSessions.length,
+                                })}
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
                     </div>
                     {selectionMode && (
@@ -1131,6 +1163,12 @@ export function SessionManagerPage({ appId }: { appId: string }) {
             setDeleteTargets(null);
           }
         }}
+      />
+
+      <SessionExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        sessions={selectedDeletableSessions}
       />
     </TooltipProvider>
   );
