@@ -33,6 +33,7 @@ import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "framer-motion";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { CircuitBreakerStatusPanel } from "@/components/proxy/CircuitBreakerStatusPanel";
+import { FailoverLogPanel } from "@/components/proxy/FailoverLogPanel";
 import type { AppId } from "@/lib/api";
 
 interface ProxyPanelProps {
@@ -507,7 +508,12 @@ export function ProxyPanel({
               </Tabs>
             </div>
 
-            {/* [8] Stats cards */}
+            {/* [8] Failover event log */}
+            <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
+              <FailoverLogPanel />
+            </div>
+
+            {/* [9] Stats cards */}
             <div className="grid gap-3 md:grid-cols-4">
               <StatCard
                 icon={<Activity className="h-4 w-4" />}
