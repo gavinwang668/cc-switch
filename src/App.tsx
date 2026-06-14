@@ -26,7 +26,6 @@ import {
   Cpu,
   LayoutDashboard,
 } from "lucide-react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Provider, VisibleApps } from "@/types";
 import type { EnvConflict } from "@/types/env";
 import { useProvidersQuery, useSettingsQuery } from "@/lib/query";
@@ -56,6 +55,7 @@ import {
 } from "@/lib/platform";
 import { useAppRouter } from "@/hooks/useAppRouter";
 import { useAppEvents } from "@/hooks/useAppEvents";
+import { useWindowControls } from "@/hooks/useWindowControls";
 import { AppSwitcher } from "@/components/AppSwitcher";
 import { ProviderList } from "@/components/providers/ProviderList";
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
@@ -121,13 +121,22 @@ function App() {
   const sharedFeatureApp: AppId =
     activeApp === "claude-desktop" ? "claude" : activeApp;
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [isWindowMaximized, setIsWindowMaximized] = useState(false);
 
-  const { data: settingsData } = useSettingsQuery();
+  const { data: settingsData, isFetched: settingsLoaded } = useSettingsQuery();
   const useAppWindowControls =
     isLinux() && (settingsData?.useAppWindowControls ?? false);
   const dragBarHeight = useAppWindowControls ? 32 : DEFAULT_DRAG_BAR_HEIGHT;
   const contentTopOffset = dragBarHeight + HEADER_HEIGHT;
+
+  const {
+    isWindowMaximized,
+    minimize: handleWindowMinimize,
+    toggleMaximize: handleWindowToggleMaximize,
+    close: handleWindowClose,
+  } = useWindowControls({
+    useAppWindowControls,
+    settingsLoaded: Boolean(settingsLoaded),
+  });
   const visibleApps: VisibleApps = settingsData?.visibleApps ?? {
     claude: true,
     "claude-desktop": true,
@@ -284,51 +293,6 @@ function App() {
     setEnvConflicts,
     setShowEnvBanner,
   });
-
-  useEffect(() => {
-    let active = true;
-    let unlistenResize: (() => void) | undefined;
-
-    const setupWindowStateSync = async () => {
-      try {
-        const currentWindow = getCurrentWindow();
-        const syncWindowMaximizedState = async () => {
-          const maximized = await currentWindow.isMaximized();
-          if (active) {
-            setIsWindowMaximized(maximized);
-          }
-        };
-
-        await syncWindowMaximizedState();
-        unlistenResize = await currentWindow.onResized(() => {
-          void syncWindowMaximizedState();
-        });
-      } catch (error) {
-        console.error("[App] Failed to sync window maximized state", error);
-      }
-    };
-
-    void setupWindowStateSync();
-    return () => {
-      active = false;
-      unlistenResize?.();
-    };
-  }, []);
-
-  useEffect(() => {
-    // settingsData 未加载时跳过，避免用 fallback false 覆盖 Rust 侧已设好的装饰状态
-    if (!settingsData) return;
-
-    const syncWindowDecorations = async () => {
-      try {
-        await getCurrentWindow().setDecorations(!useAppWindowControls);
-      } catch (error) {
-        console.error("[App] Failed to update window decorations", error);
-      }
-    };
-
-    void syncWindowDecorations();
-  }, [useAppWindowControls, settingsData]);
 
   const currentViewRef = useRef(currentView);
 
@@ -584,44 +548,6 @@ function App() {
       await providersApi.updateTrayMenu();
     } catch (error) {
       console.error("[App] Failed to refresh tray menu", error);
-    }
-  };
-
-  const notifyWindowControlError = (error: unknown) => {
-    toast.error(
-      t("notifications.windowControlFailed", {
-        defaultValue: "窗口控制失败：{{error}}",
-        error: extractErrorMessage(error),
-      }),
-    );
-  };
-
-  const handleWindowMinimize = async () => {
-    try {
-      await getCurrentWindow().minimize();
-    } catch (error) {
-      console.error("[App] Failed to minimize window", error);
-      notifyWindowControlError(error);
-    }
-  };
-
-  const handleWindowToggleMaximize = async () => {
-    try {
-      const currentWindow = getCurrentWindow();
-      await currentWindow.toggleMaximize();
-      setIsWindowMaximized(await currentWindow.isMaximized());
-    } catch (error) {
-      console.error("[App] Failed to toggle maximize", error);
-      notifyWindowControlError(error);
-    }
-  };
-
-  const handleWindowClose = async () => {
-    try {
-      await getCurrentWindow().close();
-    } catch (error) {
-      console.error("[App] Failed to close window", error);
-      notifyWindowControlError(error);
     }
   };
 
