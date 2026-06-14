@@ -1201,6 +1201,7 @@ pub fn run() {
             commands::delete_mcp_server,
             commands::toggle_mcp_app,
             commands::import_mcp_from_apps,
+            commands::test_mcp_connection,
             // Prompt management
             commands::get_prompts,
             commands::upsert_prompt,

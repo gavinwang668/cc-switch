@@ -126,4 +126,20 @@ export const mcpApi = {
   async importFromApps(): Promise<number> {
     return await invoke("import_mcp_from_apps");
   },
+
+  /**
+   * 测试 MCP 服务器连接（stdIO 启动子进程 / HTTP 发起请求）
+   */
+  async testConnection(id: string): Promise<McpConnectionTestResult> {
+    return await invoke("test_mcp_connection", { id });
+  },
 };
+
+export interface McpConnectionTestResult {
+  success: boolean;
+  transport: "stdio" | "http" | "sse" | "unknown";
+  durationMs: number;
+  message?: string | null;
+  stderrTail?: string | null;
+  error?: string | null;
+}

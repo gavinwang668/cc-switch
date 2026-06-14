@@ -8,12 +8,13 @@ import {
   useToggleMcpApp,
   useDeleteMcpServer,
   useImportMcpFromApps,
+  useTestMcpConnection,
 } from "@/hooks/useMcp";
 import type { McpServer } from "@/types";
 import type { AppId } from "@/lib/api/types";
 import McpFormModal from "./McpFormModal";
 import { ConfirmDialog } from "../ConfirmDialog";
-import { Edit3, Trash2, ExternalLink } from "lucide-react";
+import { Edit3, Trash2, ExternalLink, Activity, Loader2 } from "lucide-react";
 import { settingsApi } from "@/lib/api";
 import { mcpPresets } from "@/config/mcpPresets";
 import { toast } from "sonner";
@@ -21,6 +22,8 @@ import { MCP_APP_IDS } from "@/config/appConfig";
 import { AppCountBar } from "@/components/common/AppCountBar";
 import { AppToggleGroup } from "@/components/common/AppToggleGroup";
 import { ListItemRow } from "@/components/common/ListItemRow";
+import { McpTestResultDialog } from "./McpTestResultDialog";
+import type { McpConnectionTestResult } from "@/lib/api/mcp";
 
 interface UnifiedMcpPanelProps {
   onOpenChange: (open: boolean) => void;
@@ -38,6 +41,12 @@ const UnifiedMcpPanel = React.forwardRef<
   const { t } = useTranslation();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{
+    id: string;
+    name: string;
+    result: McpConnectionTestResult;
+  } | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -49,6 +58,7 @@ const UnifiedMcpPanel = React.forwardRef<
   const toggleAppMutation = useToggleMcpApp();
   const deleteServerMutation = useDeleteMcpServer();
   const importMutation = useImportMcpFromApps();
+  const testMutation = useTestMcpConnection();
 
   const serverEntries = useMemo((): Array<[string, McpServer]> => {
     if (!serversMap) return [];
@@ -134,6 +144,27 @@ const UnifiedMcpPanel = React.forwardRef<
     });
   };
 
+  const handleTest = async (id: string, name: string) => {
+    setTestingId(id);
+    try {
+      const result = await testMutation.mutateAsync(id);
+      setTestResult({ id, name, result });
+    } catch (error) {
+      setTestResult({
+        id,
+        name,
+        result: {
+          success: false,
+          transport: "unknown",
+          durationMs: 0,
+          error: String(error),
+        },
+      });
+    } finally {
+      setTestingId(null);
+    }
+  };
+
   const handleCloseForm = () => {
     setIsFormOpen(false);
     setEditingId(null);
@@ -175,6 +206,8 @@ const UnifiedMcpPanel = React.forwardRef<
                   onToggleApp={handleToggleApp}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
+                  onTest={handleTest}
+                  isTesting={testingId === id}
                   isLast={index === serverEntries.length - 1}
                 />
               ))}
@@ -208,6 +241,17 @@ const UnifiedMcpPanel = React.forwardRef<
           onCancel={() => setConfirmDialog(null)}
         />
       )}
+
+      {testResult && (
+        <McpTestResultDialog
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setTestResult(null);
+          }}
+          serverName={testResult.name}
+          result={testResult.result}
+        />
+      )}
     </div>
   );
 });
@@ -220,6 +264,8 @@ interface UnifiedMcpListItemProps {
   onToggleApp: (serverId: string, app: AppId, enabled: boolean) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onTest: (id: string, name: string) => void;
+  isTesting: boolean;
   isLast?: boolean;
 }
 
@@ -229,6 +275,8 @@ const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
   onToggleApp,
   onEdit,
   onDelete,
+  onTest,
+  isTesting,
   isLast,
 }) => {
   const { t } = useTranslation();
@@ -290,6 +338,21 @@ const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
       />
 
       <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => onTest(id, name)}
+          disabled={isTesting}
+          title={t("mcp.testConnection", { defaultValue: "测试连接" })}
+        >
+          {isTesting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Activity size={14} />
+          )}
+        </Button>
         <Button
           type="button"
           variant="ghost"
