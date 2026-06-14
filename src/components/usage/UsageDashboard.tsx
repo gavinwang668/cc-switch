@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { UsageHero } from "./UsageHero";
 import { UsageTrendChart } from "./UsageTrendChart";
@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
-import { usageKeys } from "@/lib/query/usage";
+import { usageKeys, useUsageSummary } from "@/lib/query/usage";
 import { useUsageEventBridge } from "@/hooks/useUsageEventBridge";
 import {
   Accordion,
@@ -34,6 +34,9 @@ import { getLocaleFromLanguage } from "./format";
 import { getUsageRangePresetLabel, resolveUsageRange } from "@/lib/usageRange";
 import { UsageDateRangePicker } from "./UsageDateRangePicker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useUsageBudget, getBudgetWindow } from "@/hooks/useUsageBudget";
+import { UsageBudgetBanner } from "./UsageBudgetBanner";
+import { UsageBudgetDialog } from "./UsageBudgetDialog";
 
 const APP_FILTER_OPTIONS: AppTypeFilter[] = ["all", ...KNOWN_APP_TYPES];
 
@@ -43,10 +46,36 @@ export function UsageDashboard() {
   const [range, setRange] = useState<UsageRangeSelection>({ preset: "today" });
   const [appType, setAppType] = useState<AppTypeFilter>("all");
   const [refreshIntervalMs, setRefreshIntervalMs] = useState(30000);
+  const { budget, setBudget, resetBudget } = useUsageBudget();
+  const [budgetDialogOpen, setBudgetDialogOpen] = useState(false);
+  const [thresholdDismissed, setThresholdDismissed] = useState(false);
+  const [exceededDismissed, setExceededDismissed] = useState(false);
+
+  // 每次预算或阈值变化都重置"已忽略"状态
+  const budgetFingerprint = useMemo(
+    () => `${budget.amountUsd}|${budget.thresholdPercent}|${budget.period}`,
+    [budget.amountUsd, budget.thresholdPercent, budget.period],
+  );
+  useEffect(() => {
+    setThresholdDismissed(false);
+    setExceededDismissed(false);
+  }, [budgetFingerprint]);
 
   // 后端写入新日志时 emit `usage-log-recorded`，本 hook 立刻 invalidate 所有
   // usage 查询，实现实时刷新（仅在 Dashboard 挂载时生效，离开页面自动取消监听）
   useUsageEventBridge();
+
+  // 预算汇总：使用预算周期（今日/本周/本月）固定查询，不受用户当前 range 影响
+  const budgetWindow = useMemo(() => {
+    const { start, end } = getBudgetWindow(budget.period);
+    return {
+      preset: "custom" as const,
+      customStartDate: Math.floor(start.getTime() / 1000),
+      customEndDate: Math.floor(end.getTime() / 1000),
+    };
+  }, [budget.period]);
+
+  const { data: budgetSummary } = useUsageSummary(budgetWindow);
 
   const refreshIntervalOptionsMs = [0, 5000, 10000, 30000, 60000] as const;
   const changeRefreshInterval = () => {
@@ -135,6 +164,16 @@ export function UsageDashboard() {
         refreshIntervalMs={refreshIntervalMs}
       />
 
+      <UsageBudgetBanner
+        budget={budget}
+        spent={Number(budgetSummary?.totalCost ?? 0)}
+        onConfigure={() => setBudgetDialogOpen(true)}
+        onDismissThreshold={() => setThresholdDismissed(true)}
+        thresholdDismissed={thresholdDismissed}
+        onDismissExceeded={() => setExceededDismissed(true)}
+        exceededDismissed={exceededDismissed}
+      />
+
       <UsageTrendChart
         range={range}
         rangeLabel={rangeLabel}
@@ -218,6 +257,14 @@ export function UsageDashboard() {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+
+      <UsageBudgetDialog
+        open={budgetDialogOpen}
+        onOpenChange={setBudgetDialogOpen}
+        budget={budget}
+        onSave={setBudget}
+        onReset={resetBudget}
+      />
     </motion.div>
   );
 }
