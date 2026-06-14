@@ -45,6 +45,7 @@ import { useUsageCacheBridge } from "@/hooks/useUsageCacheBridge";
 import { useLastValidValue } from "@/hooks/useLastValidValue";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { isTextEditableTarget } from "@/utils/domUtils";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { deepClone } from "@/utils/deepClone";
 import { cn } from "@/lib/utils";
 import {
@@ -300,32 +301,74 @@ function App() {
     currentViewRef.current = currentView;
   }, [currentView]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "," && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        navigate("settings");
-        return;
-      }
-
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-
-      if (document.body.style.overflow === "hidden") return;
-
-      const view = currentViewRef.current;
-      if (view === "providers") return;
-
-      if (isTextEditableTarget(event.target)) return;
-
-      event.preventDefault();
-      navigate(view === "skillsDiscovery" ? "skills" : "providers");
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
+  // 全局键盘快捷键
+  useKeyboardShortcuts([
+    {
+      id: "navigation",
+      title: "navigation",
+      shortcuts: [
+        {
+          key: ",",
+          meta: true,
+          action: () => navigate("settings"),
+          description: "打开设置",
+        },
+        {
+          key: ",",
+          ctrl: true,
+          action: () => navigate("settings"),
+          description: "打开设置 (非 macOS)",
+        },
+        {
+          key: "1",
+          meta: true,
+          shift: true,
+          action: () => navigate("providers"),
+          description: "切换到供应商",
+        },
+        {
+          key: "2",
+          meta: true,
+          shift: true,
+          action: () => navigate("prompts"),
+          description: "切换到提示词",
+        },
+        {
+          key: "3",
+          meta: true,
+          shift: true,
+          action: () => navigate("skills"),
+          description: "切换到技能",
+        },
+        {
+          key: "4",
+          meta: true,
+          shift: true,
+          action: () => navigate("mcp"),
+          description: "切换到 MCP",
+        },
+        {
+          key: "5",
+          meta: true,
+          shift: true,
+          action: () => navigate("sessions"),
+          description: "切换到会话",
+        },
+        {
+          key: "Escape",
+          action: () => {
+            if (document.body.style.overflow === "hidden") return false;
+            if (isTextEditableTarget(window.document.activeElement)) return false;
+            const view = currentViewRef.current;
+            if (view === "providers") return false;
+            navigate(view === "skillsDiscovery" ? "skills" : "providers");
+            return true;
+          },
+          description: "返回供应商视图",
+        },
+      ],
+    },
+  ]);
 
   const [launchDashboardOpen, setLaunchDashboardOpen] = useState(false);
   const openHermesWebUI = useOpenHermesWebUI(() =>
