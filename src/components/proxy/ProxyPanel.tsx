@@ -9,12 +9,14 @@ import {
   Loader2,
   Zap,
   Power,
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ToggleRow } from "@/components/ui/toggle-row";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
 import { toast } from "sonner";
 import { useFailoverQueue } from "@/lib/query/failover";
@@ -30,6 +32,8 @@ import type { ProxyStatus } from "@/types/proxy";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "framer-motion";
 import { extractErrorMessage } from "@/utils/errorUtils";
+import { CircuitBreakerStatusPanel } from "@/components/proxy/CircuitBreakerStatusPanel";
+import type { AppId } from "@/lib/api";
 
 interface ProxyPanelProps {
   enableLocalProxy: boolean;
@@ -463,7 +467,47 @@ export function ProxyPanel({
               )}
             </div>
 
-            {/* [7] Stats cards */}
+            {/* [7] Circuit breaker status panel — tabs by app */}
+            <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">
+                  {t("circuitBreaker.status.panelTitle", {
+                    defaultValue: "熔断器状态",
+                  })}
+                </p>
+              </div>
+              <Tabs
+                defaultValue="claude"
+                className="w-full"
+              >
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="claude">Claude</TabsTrigger>
+                  <TabsTrigger value="codex">Codex</TabsTrigger>
+                  <TabsTrigger value="gemini">Gemini</TabsTrigger>
+                </TabsList>
+                <TabsContent value="claude">
+                  <CircuitBreakerStatusPanel
+                    appType={"claude" as AppId}
+                    isProxyRunning={isRunning}
+                  />
+                </TabsContent>
+                <TabsContent value="codex">
+                  <CircuitBreakerStatusPanel
+                    appType={"codex" as AppId}
+                    isProxyRunning={isRunning}
+                  />
+                </TabsContent>
+                <TabsContent value="gemini">
+                  <CircuitBreakerStatusPanel
+                    appType={"gemini" as AppId}
+                    isProxyRunning={isRunning}
+                  />
+                </TabsContent>
+              </Tabs>
+            </div>
+
+            {/* [8] Stats cards */}
             <div className="grid gap-3 md:grid-cols-4">
               <StatCard
                 icon={<Activity className="h-4 w-4" />}
