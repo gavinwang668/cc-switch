@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { invoke } from "@tauri-apps/api/core";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
@@ -35,9 +34,8 @@ import {
   providersApi,
   settingsApi,
   type AppId,
-  type ProviderSwitchEvent,
 } from "@/lib/api";
-import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
+import { checkAllEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
 import { openclawKeys, useOpenClawHealth } from "@/hooks/useOpenClaw";
 import { hermesKeys, useOpenHermesWebUI } from "@/hooks/useHermes";
@@ -45,7 +43,6 @@ import { hermesApi } from "@/lib/api/hermes";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
 import { useAutoCompact } from "@/hooks/useAutoCompact";
 import { useUsageCacheBridge } from "@/hooks/useUsageCacheBridge";
-import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { useLastValidValue } from "@/hooks/useLastValidValue";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { isTextEditableTarget } from "@/utils/domUtils";
@@ -58,6 +55,7 @@ import {
   DRAG_REGION_STYLE,
 } from "@/lib/platform";
 import { useAppRouter } from "@/hooks/useAppRouter";
+import { useAppEvents } from "@/hooks/useAppEvents";
 import { AppSwitcher } from "@/components/AppSwitcher";
 import { ProviderList } from "@/components/providers/ProviderList";
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
@@ -91,12 +89,6 @@ import ToolsPanel from "@/components/openclaw/ToolsPanel";
 import AgentsDefaultsPanel from "@/components/openclaw/AgentsDefaultsPanel";
 import OpenClawHealthBanner from "@/components/openclaw/OpenClawHealthBanner";
 import HermesMemoryPanel from "@/components/hermes/HermesMemoryPanel";
-
-interface SyncStatusUpdatedPayload {
-  source?: string;
-  status?: string;
-  error?: string;
-}
 
 const DEFAULT_DRAG_BAR_HEIGHT = isWindows() || isLinux() ? 0 : 28; // px
 const HEADER_HEIGHT = 64; // px
@@ -286,89 +278,12 @@ function App() {
     });
   };
 
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    let active = true;
-
-    const setupListener = async () => {
-      try {
-        const off = await providersApi.onSwitched(
-          async (event: ProviderSwitchEvent) => {
-            if (event.appType === activeApp) {
-              await refetch();
-            }
-          },
-        );
-        if (!active) {
-          off();
-          return;
-        }
-        unsubscribe = off;
-      } catch (error) {
-        console.error("[App] Failed to subscribe provider switch event", error);
-      }
-    };
-
-    void setupListener();
-    return () => {
-      active = false;
-      unsubscribe?.();
-    };
-  }, [activeApp, refetch]);
-
-  useTauriEvent("universal-provider-synced", async () => {
-    await queryClient.invalidateQueries({ queryKey: ["providers"] });
-    try {
-      await providersApi.updateTrayMenu();
-    } catch (error) {
-      console.error("[App] Failed to update tray menu", error);
-    }
+  useAppEvents({
+    activeApp,
+    refetch,
+    setEnvConflicts,
+    setShowEnvBanner,
   });
-
-  useTauriEvent<SyncStatusUpdatedPayload | null | undefined>(
-    "webdav-sync-status-updated",
-    async (payload) => {
-      const statusPayload = payload ?? {};
-      await queryClient.invalidateQueries({ queryKey: ["settings"] });
-      if (statusPayload.source !== "auto" || statusPayload.status !== "error") {
-        return;
-      }
-      toast.error(
-        t("settings.webdavSync.autoSyncFailedToast", {
-          error: statusPayload.error || t("common.unknown"),
-        }),
-      );
-    },
-  );
-
-  useTauriEvent<SyncStatusUpdatedPayload | null | undefined>(
-    "s3-sync-status-updated",
-    async (payload) => {
-      const statusPayload = payload ?? {};
-      await queryClient.invalidateQueries({ queryKey: ["settings"] });
-      if (statusPayload.source !== "auto" || statusPayload.status !== "error") {
-        return;
-      }
-      toast.error(
-        t("settings.s3Sync.autoSyncFailedToast", {
-          error: statusPayload.error || t("common.unknown"),
-        }),
-      );
-    },
-  );
-
-  useTauriEvent<{ appType: string; providerName: string }>(
-    "proxy-official-warning",
-    (payload) => {
-      toast.warning(
-        t("notifications.proxyOfficialWarning", {
-          name: payload.providerName,
-          defaultValue: `当前供应商 ${payload.providerName} 是官方供应商，建议切换到第三方供应商后再使用代理接管`,
-        }),
-        { duration: 8000 },
-      );
-    },
-  );
 
   useEffect(() => {
     let active = true;
@@ -414,107 +329,6 @@ function App() {
 
     void syncWindowDecorations();
   }, [useAppWindowControls, settingsData]);
-
-  useEffect(() => {
-    const checkEnvOnStartup = async () => {
-      try {
-        const allConflicts = await checkAllEnvConflicts();
-        const flatConflicts = Object.values(allConflicts).flat();
-
-        if (flatConflicts.length > 0) {
-          setEnvConflicts(flatConflicts);
-          const dismissed = sessionStorage.getItem("env_banner_dismissed");
-          if (!dismissed) {
-            setShowEnvBanner(true);
-          }
-        }
-      } catch (error) {
-        console.error(
-          "[App] Failed to check environment conflicts on startup:",
-          error,
-        );
-      }
-    };
-
-    checkEnvOnStartup();
-  }, []);
-
-  useEffect(() => {
-    const checkMigration = async () => {
-      try {
-        const migrated = await invoke<boolean>("get_migration_result");
-        if (migrated) {
-          toast.success(
-            t("migration.success", { defaultValue: "配置迁移成功" }),
-            { closeButton: true },
-          );
-        }
-      } catch (error) {
-        console.error("[App] Failed to check migration result:", error);
-      }
-    };
-
-    checkMigration();
-  }, [t]);
-
-  useEffect(() => {
-    const checkSkillsMigration = async () => {
-      try {
-        const result = await invoke<{ count: number; error?: string } | null>(
-          "get_skills_migration_result",
-        );
-        if (result?.error) {
-          toast.error(t("migration.skillsFailed"), {
-            description: t("migration.skillsFailedDescription"),
-            closeButton: true,
-          });
-          console.error("[App] Skills SSOT migration failed:", result.error);
-          return;
-        }
-        if (result && result.count > 0) {
-          toast.success(t("migration.skillsSuccess", { count: result.count }), {
-            closeButton: true,
-          });
-          await queryClient.invalidateQueries({ queryKey: ["skills"] });
-        }
-      } catch (error) {
-        console.error("[App] Failed to check skills migration result:", error);
-      }
-    };
-
-    checkSkillsMigration();
-  }, [t, queryClient]);
-
-  useEffect(() => {
-    const checkEnvOnSwitch = async () => {
-      try {
-        const conflicts = await checkEnvConflicts(activeApp);
-
-        if (conflicts.length > 0) {
-          setEnvConflicts((prev) => {
-            const existingKeys = new Set(
-              prev.map((c) => `${c.varName}:${c.sourcePath}`),
-            );
-            const newConflicts = conflicts.filter(
-              (c) => !existingKeys.has(`${c.varName}:${c.sourcePath}`),
-            );
-            return [...prev, ...newConflicts];
-          });
-          const dismissed = sessionStorage.getItem("env_banner_dismissed");
-          if (!dismissed) {
-            setShowEnvBanner(true);
-          }
-        }
-      } catch (error) {
-        console.error(
-          "[App] Failed to check environment conflicts on app switch:",
-          error,
-        );
-      }
-    };
-
-    checkEnvOnSwitch();
-  }, [activeApp]);
 
   const currentViewRef = useRef(currentView);
 
