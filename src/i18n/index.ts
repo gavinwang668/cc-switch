@@ -10,7 +10,10 @@ const DEFAULT_LANGUAGE: Language = "zh";
  * 懒加载语言包。Vite 会将每个 `import()` 拆分为独立 chunk，
  * 启动时不再解析全部四份翻译。
  */
-const localeLoaders: Record<Language, () => Promise<{ default: Record<string, unknown> }>> = {
+const localeLoaders: Record<
+  Language,
+  () => Promise<{ default: Record<string, unknown> }>
+> = {
   en: () => import("./locales/en.json"),
   ja: () => import("./locales/ja.json"),
   zh: () => import("./locales/zh.json"),
@@ -35,10 +38,8 @@ const getInitialLanguage = (): Language => {
       if ((SUPPORTED_LANGUAGES as string[]).includes(stored ?? "")) {
         return stored as Language;
       }
-    } catch (error) {
+    } catch {
       // 静默失败即可
-      // eslint-disable-next-line no-console
-      console.warn("[i18n] Failed to read stored language preference", error);
     }
   }
 

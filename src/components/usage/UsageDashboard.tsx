@@ -5,6 +5,8 @@ import { UsageTrendChart } from "./UsageTrendChart";
 import { RequestLogTable } from "./RequestLogTable";
 import { ProviderStatsTable } from "./ProviderStatsTable";
 import { ModelStatsTable } from "./ModelStatsTable";
+import { CostEstimationPanel } from "./CostEstimationPanel";
+import { BudgetAlertSettings } from "./BudgetAlertSettings";
 import {
   KNOWN_APP_TYPES,
   type AppType,
@@ -19,6 +21,7 @@ import {
   RefreshCw,
   Coins,
   LayoutGrid,
+  DollarSign,
 } from "lucide-react";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import {
@@ -419,6 +422,50 @@ export function UsageDashboard() {
           </AccordionTrigger>
           <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
             <PricingConfigPanel />
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem
+          value="cost-estimation"
+          className="rounded-xl glass-card overflow-hidden"
+        >
+          <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 data-[state=open]:bg-muted/50">
+            <div className="flex items-center gap-3">
+              <DollarSign className="h-5 w-5 text-green-500" />
+              <div className="text-left">
+                <h3 className="text-base font-semibold">
+                  {t("usage.costEstimation.title")}
+                </h3>
+                <p className="text-sm text-muted-foreground font-normal">
+                  {t("usage.costEstimation.description")}
+                </p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
+            <CostEstimationPanel />
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem
+          value="budget-alerts"
+          className="rounded-xl glass-card overflow-hidden"
+        >
+          <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 data-[state=open]:bg-muted/50">
+            <div className="flex items-center gap-3">
+              <Coins className="h-5 w-5 text-orange-500" />
+              <div className="text-left">
+                <h3 className="text-base font-semibold">
+                  {t("usage.budgetAlerts.title")}
+                </h3>
+                <p className="text-sm text-muted-foreground font-normal">
+                  {t("usage.budgetAlerts.description")}
+                </p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
+            <BudgetAlertSettings />
           </AccordionContent>
         </AccordionItem>
       </Accordion>

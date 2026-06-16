@@ -8,6 +8,7 @@ mod codex_config;
 mod codex_history_migration;
 mod commands;
 mod config;
+pub mod core;
 mod database;
 mod deeplink;
 mod error;
@@ -42,6 +43,7 @@ pub use commands::open_provider_terminal;
 pub use commands::*;
 pub use config::{get_claude_mcp_path, get_claude_settings_path, read_json_file};
 pub use database::Database;
+pub use proxy::{ProxyConfig, ProxyStatus, server::ProxyServer};
 pub use deeplink::{import_provider_from_deeplink, parse_deeplink_url, DeepLinkImportRequest};
 pub use error::AppError;
 pub use mcp::{
@@ -1434,6 +1436,10 @@ pub fn run() {
             commands::copilot_get_models,
             commands::copilot_get_models_for_account,
             commands::copilot_get_usage,
+            // API Key 安全管理（系统 Keychain）
+            commands::set_api_key,
+            commands::get_api_key,
+            commands::delete_api_key,
             commands::copilot_get_usage_for_account,
             // OMO commands
             commands::read_omo_local_file,

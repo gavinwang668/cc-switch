@@ -7,6 +7,7 @@ license = "MIT"
 repository = "https://github.com/farion1231/cc-switch"
 edition = "2021"
 rust-version = "1.85.0"
+default-run = "cc-switch"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -43,7 +44,7 @@ reqwest = { version = "0.12", features = ["rustls-tls", "json", "stream", "socks
 arboard = "3.6"
 flate2 = "1"
 brotli = "7"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync", "signal"] }
 futures = "0.3"
 async-stream = "0.3"
 bytes = "1.5"
@@ -78,8 +79,14 @@ rust_decimal = "1.33"
 uuid = { version = "1.11", features = ["v4"] }
 sha2 = "0.10"
 hmac = "0.12"
+keyring = { version = "3.6", features = ["windows-native"] }
 json5 = "0.4"
 json-five = "0.3.1"
+clap = { version = "4.5", features = ["derive"] }
+
+[[bin]]
+name = "cc-switch-cli"
+path = "src/bin/cc-switch-cli.rs"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2"

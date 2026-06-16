@@ -42,14 +42,18 @@ function pushEvent(event: FailoverEvent) {
 function inferReason(reason: string | undefined): FailoverReason {
   if (!reason) return "unknown";
   const r = reason.toLowerCase();
-  if (r.includes("consecutive") || r.includes("fail")) return "consecutive_failures";
+  if (r.includes("consecutive") || r.includes("fail"))
+    return "consecutive_failures";
   if (r.includes("timeout")) return "timeout";
   if (r.includes("stream")) return "stream_error";
-  if (r.includes("non_stream") || r.includes("non-stream")) return "non_stream_error";
+  if (r.includes("non_stream") || r.includes("non-stream"))
+    return "non_stream_error";
   return "unknown";
 }
 
-function inferResult(result: string | undefined): "success" | "skipped" | "failed" {
+function inferResult(
+  result: string | undefined,
+): "success" | "skipped" | "failed" {
   if (!result) return "success";
   if (result === "failed") return "failed";
   if (result === "skipped") return "skipped";

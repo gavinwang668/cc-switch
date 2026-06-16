@@ -1,4 +1,10 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  type ReactNode,
+} from "react";
 
 export type View =
   | "providers"
@@ -64,13 +70,19 @@ export function RouterProvider({ children }: { children: ReactNode }) {
 
   const goBack = useCallback(() => {
     setCurrentView((prev) =>
-      prev === "skillsDiscovery" ? "skills" : "providers"
+      prev === "skillsDiscovery" ? "skills" : "providers",
     );
   }, []);
 
   return (
     <RouterContext.Provider
-      value={{ currentView, navigate, goBack, settingsDefaultTab, setSettingsDefaultTab }}
+      value={{
+        currentView,
+        navigate,
+        goBack,
+        settingsDefaultTab,
+        setSettingsDefaultTab,
+      }}
     >
       {children}
     </RouterContext.Provider>

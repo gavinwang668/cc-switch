@@ -847,6 +847,70 @@ pub fn get_opencode_live_provider_ids() -> Result<Vec<String>, String> {
 // OpenClaw 专属命令 → 已迁移至 commands/openclaw.rs
 // ============================================================================
 
+/// 验证 Provider API Key 的有效性
+///
+/// 向 provider 的基础 URL 发送一个轻量级请求，检查 API Key 是否有效。
+/// - 对 Anthropic 兼容 API: 发送 GET /v1/models (或 /health)
+/// - 对 OpenAI 兼容 API: 发送 GET /v1/models
+/// - 对通用 API: 发送 GET 到 base_url 的根路径
+#[tauri::command]
+pub async fn verify_provider_api_key(
+    #[allow(non_snake_case)] baseUrl: String,
+    #[allow(non_snake_case)] apiKey: String,
+) -> Result<bool, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    // 依次尝试常见验证端点
+    let endpoints = vec![
+        format!("{}/v1/models", baseUrl.trim_end_matches('/')),
+        format!("{}/models", baseUrl.trim_end_matches('/')),
+        format!("{}/health", baseUrl.trim_end_matches('/')),
+        baseUrl.trim_end_matches('/').to_string(),
+    ];
+
+    // 去重
+    let mut seen = std::collections::HashSet::new();
+    let unique_endpoints: Vec<_> = endpoints
+        .into_iter()
+        .filter(|u| seen.insert(u.clone()))
+        .collect();
+
+    for url in &unique_endpoints {
+        let response = client
+            .get(url)
+            .header("Authorization", format!("Bearer {}", apiKey))
+            .header("x-api-key", &apiKey)
+            .header("Content-Type", "application/json")
+            .send()
+            .await;
+
+        match response {
+            Ok(resp) => {
+                let status = resp.status();
+                // 200-299 表示有效，401/403 表示认证失败（key 无效但端点可达）
+                if status.is_success() {
+                    return Ok(true);
+                } else if status == reqwest::StatusCode::UNAUTHORIZED
+                    || status == reqwest::StatusCode::FORBIDDEN
+                {
+                    return Ok(false);
+                }
+                // 其他错误码（如 404, 500）继续尝试下一个端点
+            }
+            Err(_) => {
+                // 连接错误，继续尝试下一个端点
+                continue;
+            }
+        }
+    }
+
+    // 所有端点都不可达 — 无法验证
+    Err("Unable to verify API key: all endpoints unreachable".to_string())
+}
+
 #[cfg(test)]
 mod import_claude_desktop_tests {
     use super::suggested_claude_desktop_routes;

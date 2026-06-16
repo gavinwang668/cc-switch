@@ -88,6 +88,25 @@ pub fn claude_api_format_needs_transform(api_format: &str) -> bool {
     )
 }
 
+/// 获取 Claude Desktop API 格式
+///
+/// 优先级：meta.claudeDesktopApiFormat > 默认 "anthropic"
+/// 用于 Claude Desktop 网关模式，支持额外的 "bedrock" 格式
+pub fn get_claude_desktop_api_format(provider: &Provider) -> &'static str {
+    if let Some(meta) = provider.meta.as_ref() {
+        if let Some(api_format) = meta.claude_desktop_api_format.as_deref() {
+            return match api_format {
+                "openai_chat" => "openai_chat",
+                "openai_responses" => "openai_responses",
+                "gemini_native" => "gemini_native",
+                "bedrock" => "bedrock",
+                _ => "anthropic",
+            };
+        }
+    }
+    "anthropic"
+}
+
 fn is_reasoning_vendor_identifier(value: &str) -> bool {
     let value = value.to_ascii_lowercase();
     REASONING_VENDOR_HINTS
@@ -591,6 +610,11 @@ impl ClaudeAdapter {
     /// - "openai_chat": OpenAI Chat Completions 格式，需要格式转换
     /// - "openai_responses": OpenAI Responses API 格式，需要格式转换
     fn get_api_format(&self, provider: &Provider) -> &'static str {
+        // 优先检查 claude_desktop_api_format（Claude Desktop 网关模式）
+        let desktop_format = get_claude_desktop_api_format(provider);
+        if desktop_format != "anthropic" {
+            return desktop_format;
+        }
         get_claude_api_format(provider)
     }
 

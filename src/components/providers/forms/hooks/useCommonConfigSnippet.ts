@@ -92,7 +92,7 @@ export function useCommonConfigSnippet({
                 window.localStorage.removeItem(LEGACY_STORAGE_KEY);
               }
             } catch (e) {
-              console.warn("[迁移] 从 localStorage 迁移失败:", e);
+              console.error("[迁移] 从 localStorage 迁移失败:", e);
             }
           }
         }

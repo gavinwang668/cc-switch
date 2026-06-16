@@ -4,10 +4,7 @@ import { AlertTriangle, CheckCircle2, Settings2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import {
-  buildBudgetStatus,
-  type UsageBudget,
-} from "@/hooks/useUsageBudget";
+import { buildBudgetStatus, type UsageBudget } from "@/hooks/useUsageBudget";
 
 interface UsageBudgetBannerProps {
   budget: UsageBudget;
@@ -36,7 +33,10 @@ export function UsageBudgetBanner({
   exceededDismissed,
 }: UsageBudgetBannerProps) {
   const { t } = useTranslation();
-  const status = useMemo(() => buildBudgetStatus(budget, spent), [budget, spent]);
+  const status = useMemo(
+    () => buildBudgetStatus(budget, spent),
+    [budget, spent],
+  );
 
   if (!status.enabled) return null;
 
@@ -48,8 +48,7 @@ export function UsageBudgetBanner({
   if (over) tone = "danger";
   else if (status.reachedThreshold) tone = "warn";
 
-  const showThresholdAlert =
-    tone === "warn" && !thresholdDismissed;
+  const showThresholdAlert = tone === "warn" && !thresholdDismissed;
   const showExceededAlert = tone === "danger" && !exceededDismissed;
 
   if (!showThresholdAlert && !showExceededAlert) {

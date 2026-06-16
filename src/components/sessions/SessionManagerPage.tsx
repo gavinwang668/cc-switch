@@ -723,8 +723,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                     "请先勾选要导出的会话（需可读取的会话）",
                                 })
                               : t("sessionExport.tooltipWithSelection", {
-                                  defaultValue:
-                                    "导出已选择的 {{count}} 个会话",
+                                  defaultValue: "导出已选择的 {{count}} 个会话",
                                   count: selectedDeletableSessions.length,
                                 })}
                           </TooltipContent>

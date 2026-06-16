@@ -89,7 +89,9 @@ export function useSystemNotification(): UseSystemNotificationResult {
   const [permission, setPermission] = useState<NotificationPermissionState>(
     () => detectSupport(),
   );
-  const [hasRequested, setHasRequested] = useState<boolean>(() => readAskedFlag());
+  const [hasRequested, setHasRequested] = useState<boolean>(() =>
+    readAskedFlag(),
+  );
   const inFlight = useRef<Promise<NotificationPermissionState> | null>(null);
 
   useEffect(() => {
@@ -131,10 +133,9 @@ export function useSystemNotification(): UseSystemNotificationResult {
       try {
         const toast = await importSonner();
         const level = options.level ?? "info";
-        const fn =
-          toast[
-            LEVEL_TO_SONNER[level] as keyof typeof toast
-          ] as typeof toast.info;
+        const fn = toast[
+          LEVEL_TO_SONNER[level] as keyof typeof toast
+        ] as typeof toast.info;
         fn(options.title, {
           description: options.body,
           duration: options.autoCloseMs ?? 4000,
@@ -176,10 +177,8 @@ export function useSystemNotification(): UseSystemNotificationResult {
             }
           };
         }
-      } catch (error) {
+      } catch {
         // 部分平台（如 macOS）在无用户交互时构造会抛错，降级到 toast
-        // eslint-disable-next-line no-console
-        console.warn("[useSystemNotification] 通知失败，回退为 toast", error);
         await fallbackToast(options);
       }
     },

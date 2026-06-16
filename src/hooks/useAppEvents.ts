@@ -6,7 +6,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { providersApi, type AppId, type ProviderSwitchEvent } from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useTauriEvent } from "@/hooks/useTauriEvent";
+import { useSystemNotification } from "@/hooks/useSystemNotification";
 import type { EnvConflict } from "@/types/env";
+import type { NotificationPreferences } from "@/types/notification";
+import { DEFAULT_NOTIFICATION_PREFERENCES } from "@/types/notification";
 
 interface SyncStatusUpdatedPayload {
   source?: string;
@@ -29,6 +32,23 @@ export function useAppEvents({
 }: UseAppEventsParams) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { notify } = useSystemNotification();
+
+  // Load notification preferences
+  const getPreferences = (): NotificationPreferences => {
+    try {
+      const saved = localStorage.getItem("notification-preferences");
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.error(
+        "[useAppEvents] Failed to load notification preferences:",
+        error,
+      );
+    }
+    return DEFAULT_NOTIFICATION_PREFERENCES;
+  };
 
   // Provider switch event
   useEffect(() => {
@@ -41,6 +61,22 @@ export function useAppEvents({
           async (event: ProviderSwitchEvent) => {
             if (event.appType === activeApp) {
               await refetch();
+
+              // Send notification if enabled
+              const prefs = getPreferences();
+              if (prefs.enabled && prefs.events.providerSwitch) {
+                await notify({
+                  title: t("notifications.providerSwitched", {
+                    defaultValue: "供应商已切换",
+                  }),
+                  body: t("notifications.providerSwitchedBody", {
+                    provider: event.providerName,
+                    defaultValue: `已切换到 ${event.providerName}`,
+                  }),
+                  level: "info",
+                  tag: "provider-switch",
+                });
+              }
             }
           },
         );
@@ -59,7 +95,7 @@ export function useAppEvents({
       active = false;
       unsubscribe?.();
     };
-  }, [activeApp, refetch]);
+  }, [activeApp, refetch, notify, t]);
 
   // Universal provider synced
   useTauriEvent("universal-provider-synced", async () => {

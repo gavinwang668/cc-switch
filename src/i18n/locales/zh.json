@@ -1729,6 +1729,20 @@
       "deleteTitle": "删除 MCP 服务器",
       "deleteMessage": "确定要删除 MCP 服务器 \"{{id}}\" 吗？此操作无法撤销。"
     },
+    "test": {
+      "title": "连接测试",
+      "button": "测试连接",
+      "testing": "测试中...",
+      "success": "连接成功",
+      "failed": "连接失败",
+      "successTitle": "连接测试成功",
+      "failedTitle": "连接测试失败",
+      "transport": "传输协议",
+      "message": "消息",
+      "error": "错误",
+      "stderr": "标准错误",
+      "clear": "清除结果"
+    },
     "presets": {
       "title": "选择 MCP 类型",
       "enable": "启用",

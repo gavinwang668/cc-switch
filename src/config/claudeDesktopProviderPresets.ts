@@ -8,14 +8,9 @@
  *
  * 翻译来源：src/config/claudeProviderPresets.ts（排除 OAuth 与不兼容预设）
  */
+import type { ClaudeDesktopApiFormat } from "../types";
 import { ProviderCategory } from "../types";
 import type { PresetTheme } from "./claudeProviderPresets";
-
-export type ClaudeDesktopApiFormat =
-  | "anthropic"
-  | "openai_chat"
-  | "openai_responses"
-  | "gemini_native";
 
 export interface ClaudeDesktopRoutePreset {
   routeId: string;

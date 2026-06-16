@@ -15,6 +15,7 @@ export interface ProviderSortUpdate {
 export interface ProviderSwitchEvent {
   appType: AppId;
   providerId: string;
+  providerName?: string;
 }
 
 export interface SwitchResult {

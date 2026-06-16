@@ -78,11 +78,7 @@ export function useOmoModelSource({
         if (active) {
           setEnabledOpencodeProviderIds(ids);
         }
-      } catch (error) {
-        console.warn(
-          "[OMO_MODEL_SOURCE_LIVE_IDS_FAILED] failed to load live provider ids",
-          error,
-        );
+      } catch {
         if (active) {
           setOmoLiveIdsLoadFailed(true);
           setEnabledOpencodeProviderIds(null);
@@ -143,15 +139,8 @@ export function useOmoModelSource({
       let parsedConfig: OpenCodeProviderConfig;
       try {
         parsedConfig = parseOpencodeConfigStrict(provider.settingsConfig);
-      } catch (error) {
+      } catch {
         parseFailedProviders.push(providerKey);
-        console.warn(
-          "[OMO_MODEL_SOURCE_PARSE_FAILED] failed to parse provider settings",
-          {
-            providerKey,
-            error,
-          },
-        );
         continue;
       }
       for (const [modelId, model] of Object.entries(

@@ -11,6 +11,7 @@ import {
   sessionsApi,
   type AppId,
 } from "@/lib/api";
+import { restoreApiKeysToProviders } from "@/lib/api/keychainHelpers";
 import type {
   Provider,
   Settings,
@@ -70,6 +71,8 @@ export const useProvidersQuery = (
 
       try {
         providers = await providersApi.getAll(appId);
+        // 从系统 Keychain 恢复 API Key（如果有占位符）
+        providers = await restoreApiKeysToProviders(providers, appId);
       } catch (error) {
         console.error("获取供应商列表失败:", error);
       }

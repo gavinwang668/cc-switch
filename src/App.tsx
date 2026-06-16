@@ -29,11 +29,7 @@ import {
 import type { Provider, VisibleApps } from "@/types";
 import type { EnvConflict } from "@/types/env";
 import { useProvidersQuery, useSettingsQuery } from "@/lib/query";
-import {
-  providersApi,
-  settingsApi,
-  type AppId,
-} from "@/lib/api";
+import { providersApi, settingsApi, type AppId } from "@/lib/api";
 import { checkAllEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
 import { openclawKeys, useOpenClawHealth } from "@/hooks/useOpenClaw";
@@ -116,7 +112,8 @@ const getInitialApp = (): AppId => {
 function App() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const { currentView, navigate, settingsDefaultTab, setSettingsDefaultTab } = useAppRouter();
+  const { currentView, navigate, settingsDefaultTab, setSettingsDefaultTab } =
+    useAppRouter();
 
   const [activeApp, setActiveApp] = useState<AppId>(getInitialApp);
   const sharedFeatureApp: AppId =
@@ -358,7 +355,8 @@ function App() {
           key: "Escape",
           action: () => {
             if (document.body.style.overflow === "hidden") return false;
-            if (isTextEditableTarget(window.document.activeElement)) return false;
+            if (isTextEditableTarget(window.document.activeElement))
+              return false;
             const view = currentViewRef.current;
             if (view === "providers") return false;
             navigate(view === "skillsDiscovery" ? "skills" : "providers");
@@ -644,9 +642,7 @@ function App() {
             />
           );
         case "agents":
-          return (
-            <AgentsPanel onOpenChange={() => navigate("providers")} />
-          );
+          return <AgentsPanel onOpenChange={() => navigate("providers")} />;
         case "universal":
           return (
             <div className="px-6 pt-4">

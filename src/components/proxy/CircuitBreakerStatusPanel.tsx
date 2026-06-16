@@ -70,10 +70,7 @@ export function CircuitBreakerStatusPanel({
     };
   }, [entries]);
 
-  const handleReset = async (
-    providerId: string,
-    providerName: string,
-  ) => {
+  const handleReset = async (providerId: string, providerName: string) => {
     if (!appType) return;
     try {
       await resetCircuitBreaker.mutateAsync({
@@ -256,9 +253,7 @@ function CircuitBreakerRow({
           <variant.Icon className={`h-4 w-4 flex-shrink-0 ${variant.color}`} />
           <div className="min-w-0">
             <p className="text-sm font-medium truncate">{entry.providerName}</p>
-            <p className="text-xs text-muted-foreground">
-              {variant.label}
-            </p>
+            <p className="text-xs text-muted-foreground">{variant.label}</p>
           </div>
         </div>
         <Button

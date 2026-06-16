@@ -20,7 +20,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useFailoverLog } from "@/hooks/useFailoverLog";
-import type { FailoverEvent, FailoverReason, FailoverResult } from "@/types/failover";
+import type {
+  FailoverEvent,
+  FailoverReason,
+  FailoverResult,
+} from "@/types/failover";
 
 type AppFilter = "all" | "claude" | "codex" | "gemini";
 
@@ -37,7 +41,9 @@ export function FailoverLogPanel() {
   const { t } = useTranslation();
   const { events, clear } = useFailoverLog();
   const [appFilter, setAppFilter] = useState<AppFilter>("all");
-  const [resultFilter, setResultFilter] = useState<"all" | FailoverResult>("all");
+  const [resultFilter, setResultFilter] = useState<"all" | FailoverResult>(
+    "all",
+  );
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
@@ -46,7 +52,8 @@ export function FailoverLogPanel() {
       if (appFilter !== "all" && e.appType !== appFilter) return false;
       if (resultFilter !== "all" && e.result !== resultFilter) return false;
       if (q) {
-        const haystack = `${e.providerName} ${e.providerId} ${e.errorMessage ?? ""}`.toLowerCase();
+        const haystack =
+          `${e.providerName} ${e.providerId} ${e.errorMessage ?? ""}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
@@ -64,7 +71,13 @@ export function FailoverLogPanel() {
 
   const handleClear = () => {
     if (events.length === 0) return;
-    if (window.confirm(t("failoverLog.confirmClear", { defaultValue: "确认清空全部故障转移日志？" }))) {
+    if (
+      window.confirm(
+        t("failoverLog.confirmClear", {
+          defaultValue: "确认清空全部故障转移日志？",
+        }),
+      )
+    ) {
       clear();
     }
   };
@@ -123,26 +136,42 @@ export function FailoverLogPanel() {
           <Filter className="h-3.5 w-3.5" />
           {t("failoverLog.filter", { defaultValue: "过滤" })}
         </div>
-        <Select value={appFilter} onValueChange={(v) => setAppFilter(v as AppFilter)}>
+        <Select
+          value={appFilter}
+          onValueChange={(v) => setAppFilter(v as AppFilter)}
+        >
           <SelectTrigger className="h-8 w-32 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("failoverLog.appAll", { defaultValue: "全部应用" })}</SelectItem>
+            <SelectItem value="all">
+              {t("failoverLog.appAll", { defaultValue: "全部应用" })}
+            </SelectItem>
             <SelectItem value="claude">Claude</SelectItem>
             <SelectItem value="codex">Codex</SelectItem>
             <SelectItem value="gemini">Gemini</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={resultFilter} onValueChange={(v) => setResultFilter(v as "all" | FailoverResult)}>
+        <Select
+          value={resultFilter}
+          onValueChange={(v) => setResultFilter(v as "all" | FailoverResult)}
+        >
           <SelectTrigger className="h-8 w-32 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("failoverLog.resultAll", { defaultValue: "全部结果" })}</SelectItem>
-            <SelectItem value="success">{t("failoverLog.success", { defaultValue: "成功" })}</SelectItem>
-            <SelectItem value="skipped">{t("failoverLog.skipped", { defaultValue: "跳过" })}</SelectItem>
-            <SelectItem value="failed">{t("failoverLog.failed", { defaultValue: "失败" })}</SelectItem>
+            <SelectItem value="all">
+              {t("failoverLog.resultAll", { defaultValue: "全部结果" })}
+            </SelectItem>
+            <SelectItem value="success">
+              {t("failoverLog.success", { defaultValue: "成功" })}
+            </SelectItem>
+            <SelectItem value="skipped">
+              {t("failoverLog.skipped", { defaultValue: "跳过" })}
+            </SelectItem>
+            <SelectItem value="failed">
+              {t("failoverLog.failed", { defaultValue: "失败" })}
+            </SelectItem>
           </SelectContent>
         </Select>
         <Input
@@ -182,7 +211,9 @@ export function FailoverLogPanel() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-          {t("failoverLog.noMatch", { defaultValue: "没有匹配当前过滤条件的事件。" })}
+          {t("failoverLog.noMatch", {
+            defaultValue: "没有匹配当前过滤条件的事件。",
+          })}
         </div>
       ) : (
         <div className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
@@ -220,10 +251,14 @@ function FailoverRow({ event }: { event: FailoverEvent }) {
     <div className="rounded-md border border-border bg-card/30 p-2.5 text-xs hover:bg-muted/30">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <variant.Icon className={`h-3.5 w-3.5 flex-shrink-0 ${variant.color}`} />
+          <variant.Icon
+            className={`h-3.5 w-3.5 flex-shrink-0 ${variant.color}`}
+          />
           <span className="font-medium truncate">{event.providerName}</span>
           <span className="text-muted-foreground">·</span>
-          <span className="text-muted-foreground capitalize">{event.appType}</span>
+          <span className="text-muted-foreground capitalize">
+            {event.appType}
+          </span>
         </div>
         <time className="text-muted-foreground tabular-nums">
           {formatTime(event.timestamp)}
@@ -240,7 +275,10 @@ function FailoverRow({ event }: { event: FailoverEvent }) {
         {event.errorMessage && (
           <>
             <span>·</span>
-            <span className="text-red-500 truncate max-w-[280px]" title={event.errorMessage}>
+            <span
+              className="text-red-500 truncate max-w-[280px]"
+              title={event.errorMessage}
+            >
               {event.errorMessage}
             </span>
           </>
@@ -267,13 +305,17 @@ function reasonLabel(
 ): string {
   switch (reason) {
     case "consecutive_failures":
-      return t("failoverLog.reason.consecutiveFailures", { defaultValue: "连续失败" });
+      return t("failoverLog.reason.consecutiveFailures", {
+        defaultValue: "连续失败",
+      });
     case "timeout":
       return t("failoverLog.reason.timeout", { defaultValue: "超时" });
     case "stream_error":
       return t("failoverLog.reason.streamError", { defaultValue: "流式错误" });
     case "non_stream_error":
-      return t("failoverLog.reason.nonStreamError", { defaultValue: "非流式错误" });
+      return t("failoverLog.reason.nonStreamError", {
+        defaultValue: "非流式错误",
+      });
     case "unknown":
     default:
       return t("failoverLog.reason.unknown", { defaultValue: "未知原因" });

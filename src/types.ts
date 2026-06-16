@@ -203,6 +203,10 @@ export interface ProviderMeta {
     | "openai_chat"
     | "openai_responses"
     | "gemini_native";
+  // Gemini API 格式（Gemini 供应商使用，覆盖 apiFormat）
+  geminiApiFormat?: GeminiApiFormat;
+  // Claude Desktop API 格式（Claude Desktop 供应商使用，覆盖 apiFormat）
+  claudeDesktopApiFormat?: ClaudeDesktopApiFormat;
   // 通用认证绑定
   authBinding?: AuthBinding;
   // Claude 认证字段名
@@ -244,6 +248,30 @@ export type ClaudeApiFormat =
 // - "openai_responses": OpenAI Responses API 格式，直接透传
 // - "openai_chat": OpenAI Chat Completions 格式，需要本地路由转换
 export type CodexApiFormat = "openai_responses" | "openai_chat";
+
+// Gemini API 格式类型
+// - "gemini_native": Gemini Native generateContent API 格式，直接透传
+// - "openai_chat": OpenAI Chat Completions 格式，需要格式转换
+// - "openai_responses": OpenAI Responses API 格式，需要格式转换
+// - "anthropic": Anthropic Messages API 格式，需要格式转换
+export type GeminiApiFormat =
+  | "gemini_native"
+  | "openai_chat"
+  | "openai_responses"
+  | "anthropic";
+
+// Claude Desktop API 格式类型
+// - "anthropic": Anthropic Messages API 格式，直接透传
+// - "openai_chat": OpenAI Chat Completions 格式，需要格式转换
+// - "openai_responses": OpenAI Responses API 格式，需要格式转换
+// - "gemini_native": Gemini Native generateContent API 格式，需要格式转换
+// - "bedrock": Amazon Bedrock Converse API 格式，需要格式转换
+export type ClaudeDesktopApiFormat =
+  | "anthropic"
+  | "openai_chat"
+  | "openai_responses"
+  | "gemini_native"
+  | "bedrock";
 
 export interface CodexCatalogModel {
   model: string;

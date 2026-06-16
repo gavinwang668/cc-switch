@@ -18,6 +18,7 @@ use super::{
     providers::{
         codex_chat_common::extract_reasoning_field_text,
         codex_chat_history::record_responses_sse_stream, get_adapter, get_claude_api_format,
+        get_gemini_api_format, get_claude_desktop_api_format,
         streaming::create_anthropic_sse_stream,
         streaming_codex_chat::create_responses_sse_stream_from_chat_with_context,
         streaming_gemini::create_anthropic_sse_stream_from_gemini,
@@ -213,7 +214,13 @@ async fn handle_messages_for_app(
     let api_format = result
         .claude_api_format
         .as_deref()
-        .unwrap_or_else(|| get_claude_api_format(&ctx.provider))
+        .unwrap_or_else(|| {
+            if app_type == AppType::ClaudeDesktop {
+                get_claude_desktop_api_format(&ctx.provider)
+            } else {
+                get_claude_api_format(&ctx.provider)
+            }
+        })
         .to_string();
     let response = result.response;
 
@@ -1325,7 +1332,7 @@ pub async fn handle_gemini(
             &AppType::Gemini,
             method,
             endpoint,
-            body,
+            body.clone(),
             headers,
             extensions,
             ctx.get_providers(),
@@ -1345,7 +1352,25 @@ pub async fn handle_gemini(
     let connection_guard = result.connection_guard.take();
     ctx.outbound_model = result.outbound_model.take();
     ctx.provider = result.provider;
+    let api_format = get_gemini_api_format(&ctx.provider);
     let response = result.response;
+
+    // Gemini API 格式转换：如果设置了非原生格式，需要转换
+    let adapter = get_adapter(&AppType::Gemini);
+    let needs_transform = adapter.needs_transform(&ctx.provider);
+
+    if needs_transform {
+        return handle_claude_transform(
+            response,
+            &ctx,
+            &state,
+            &body,
+            is_stream,
+            api_format,
+            connection_guard,
+        )
+        .await;
+    }
 
     process_response(
         response,

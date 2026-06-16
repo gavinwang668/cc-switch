@@ -24,6 +24,7 @@ import { parseSmartMcpJson } from "@/utils/formatters";
 import { useMcpValidation } from "./useMcpValidation";
 import { useUpsertMcpServer } from "@/hooks/useMcp";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
+import { McpConnectionTest } from "./McpConnectionTest";
 
 interface McpFormModalProps {
   editingId?: string;
@@ -711,6 +712,16 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
               )}
             </div>
           </div>
+
+          {/* MCP 连接测试（仅编辑模式） */}
+          {isEditing && editingId && (
+            <div className="glass rounded-xl p-6 border border-white/10 flex-shrink-0">
+              <h3 className="text-sm font-medium text-foreground mb-3">
+                {t("mcp.test.title")}
+              </h3>
+              <McpConnectionTest serverId={editingId} serverName={formName} />
+            </div>
+          )}
         </div>
       </FullScreenPanel>
 

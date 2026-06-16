@@ -53,6 +53,20 @@ vi.mock("@/lib/query", () => ({
   useSwitchProviderMutation: () => useSwitchProviderMutationMock(),
 }));
 
+const extractApiKeysFromProviderMock = vi.fn(
+  (provider: Provider) => Promise.resolve(provider),
+);
+const deleteProviderApiKeysMock = vi.fn((_id: string) => Promise.resolve());
+
+vi.mock("@/lib/api/keychainHelpers", () => ({
+  extractApiKeysFromProvider: (provider: Provider) =>
+    extractApiKeysFromProviderMock(provider),
+  deleteProviderApiKeys: (id: string, _app: string) =>
+    deleteProviderApiKeysMock(id),
+  restoreApiKeysToProviders: (
+    providers: Record<string, Provider>,
+  ): Promise<Record<string, Provider>> => Promise.resolve(providers),
+}));
 const providersApiUpdateMock = vi.fn();
 const providersApiUpdateTrayMenuMock = vi.fn();
 const settingsApiGetMock = vi.fn();

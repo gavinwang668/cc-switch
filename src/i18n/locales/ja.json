@@ -1729,6 +1729,20 @@
       "deleteTitle": "MCP サーバーを削除",
       "deleteMessage": "MCP サーバー「{{id}}」を削除してもよろしいですか？この操作は元に戻せません。"
     },
+    "test": {
+      "title": "接続テスト",
+      "button": "接続をテスト",
+      "testing": "テスト中...",
+      "success": "接続成功",
+      "failed": "接続失敗",
+      "successTitle": "接続テスト成功",
+      "failedTitle": "接続テスト失敗",
+      "transport": "トランスポート",
+      "message": "メッセージ",
+      "error": "エラー",
+      "stderr": "標準エラー",
+      "clear": "結果をクリア"
+    },
     "presets": {
       "title": "MCP タイプを選択",
       "enable": "有効化",

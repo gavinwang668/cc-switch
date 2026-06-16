@@ -18,6 +18,7 @@ import type {
   CodexCatalogModel,
   CodexChatReasoning,
   ClaudeApiKeyField,
+  GeminiApiFormat,
 } from "@/types";
 import {
   providerPresets,
@@ -756,6 +757,18 @@ function ProviderFormFull({
     [originalHandleGeminiModelChange, updateGeminiEnvField],
   );
 
+  // Gemini API 格式状态
+  const [geminiApiFormat, setGeminiApiFormat] = useState<GeminiApiFormat>(
+    () => {
+      if (appId !== "gemini") return "gemini_native";
+      return initialData?.meta?.geminiApiFormat ?? "gemini_native";
+    },
+  );
+
+  const handleGeminiApiFormatChange = useCallback((format: GeminiApiFormat) => {
+    setGeminiApiFormat(format);
+  }, []);
+
   const {
     useCommonConfig: useGeminiCommonConfigFlag,
     commonConfigSnippet: geminiCommonConfigSnippet,
@@ -1410,6 +1423,11 @@ function ProviderFormFull({
           : appId === "codex" && category !== "official"
             ? localCodexApiFormat
             : undefined,
+      geminiApiFormat:
+        appId === "gemini" && geminiApiFormat !== "gemini_native"
+          ? geminiApiFormat
+          : undefined,
+      claudeDesktopApiFormat: undefined,
       apiKeyField:
         appId === "claude" &&
         category !== "official" &&
@@ -2085,6 +2103,8 @@ function ProviderFormFull({
               shouldShowModelField={true}
               model={geminiModel}
               onModelChange={handleGeminiModelChange}
+              geminiApiFormat={geminiApiFormat}
+              onGeminiApiFormatChange={handleGeminiApiFormatChange}
               speedTestEndpoints={speedTestEndpoints}
             />
           )}

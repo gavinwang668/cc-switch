@@ -18,7 +18,14 @@ GEMINI.md
 /.vscode
 vitest-report.json
 nul
-
+.codex/
+.claude/
+.codebuddy/
+.workbuddy/
+.opencode/
+.gemini/
+.config/
+.trae/
 # Flatpak build artifacts
 flatpak/cc-switch.deb
 flatpak-build/

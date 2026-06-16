@@ -52,7 +52,10 @@ export function UsageBudgetDialog({
 
   const handleSave = () => {
     const sanitized: UsageBudget = {
-      amountUsd: Math.max(0, Number.isFinite(draft.amountUsd) ? draft.amountUsd : 0),
+      amountUsd: Math.max(
+        0,
+        Number.isFinite(draft.amountUsd) ? draft.amountUsd : 0,
+      ),
       thresholdPercent: Math.max(
         0,
         Math.min(100, Math.round(draft.thresholdPercent)),
@@ -111,7 +114,10 @@ export function UsageBudgetDialog({
               <Select
                 value={draft.period}
                 onValueChange={(value) =>
-                  setDraft((prev) => ({ ...prev, period: value as BudgetPeriod }))
+                  setDraft((prev) => ({
+                    ...prev,
+                    period: value as BudgetPeriod,
+                  }))
                 }
               >
                 <SelectTrigger id="budget-period">

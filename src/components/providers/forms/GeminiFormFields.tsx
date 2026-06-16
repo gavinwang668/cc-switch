@@ -4,6 +4,13 @@ import { FormLabel } from "@/components/ui/form";
 import { Download, Info, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import EndpointSpeedTest from "./EndpointSpeedTest";
 import { ApiKeySection, EndpointField, ModelInputWithFetch } from "./shared";
 import {
@@ -11,7 +18,7 @@ import {
   showFetchModelsError,
   type FetchedModel,
 } from "@/lib/api/model-fetch";
-import type { ProviderCategory } from "@/types";
+import type { GeminiApiFormat, ProviderCategory } from "@/types";
 
 interface EndpointCandidate {
   url: string;
@@ -44,6 +51,10 @@ interface GeminiFormFieldsProps {
   model: string;
   onModelChange: (value: string) => void;
 
+  // API Format
+  geminiApiFormat: GeminiApiFormat;
+  onGeminiApiFormatChange: (format: GeminiApiFormat) => void;
+
   // Speed Test Endpoints
   speedTestEndpoints: EndpointCandidate[];
 }
@@ -69,6 +80,8 @@ export function GeminiFormFields({
   shouldShowModelField,
   model,
   onModelChange,
+  geminiApiFormat,
+  onGeminiApiFormatChange,
   speedTestEndpoints,
 }: GeminiFormFieldsProps) {
   const { t } = useTranslation();
@@ -97,7 +110,7 @@ export function GeminiFormFields({
         }
       })
       .catch((err) => {
-        console.warn("[ModelFetch] Failed:", err);
+        console.error("[ModelFetch] Failed:", err);
         showFetchModelsError(err, t);
       })
       .finally(() => setIsFetchingModels(false));
@@ -157,6 +170,45 @@ export function GeminiFormFields({
           onManageClick={() => onEndpointModalToggle(true)}
         />
       )}
+
+      {/* API 格式选择 */}
+      <div className="space-y-2">
+        <FormLabel htmlFor="gemini-api-format">
+          {t("providerForm.apiFormat", { defaultValue: "API 格式" })}
+        </FormLabel>
+        <Select value={geminiApiFormat} onValueChange={onGeminiApiFormatChange}>
+          <SelectTrigger id="gemini-api-format" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="gemini_native">
+              {t("providerForm.apiFormatGeminiNative", {
+                defaultValue: "Gemini Native generateContent (原生)",
+              })}
+            </SelectItem>
+            <SelectItem value="openai_chat">
+              {t("providerForm.apiFormatOpenAIChat", {
+                defaultValue: "OpenAI Chat Completions (需转换)",
+              })}
+            </SelectItem>
+            <SelectItem value="openai_responses">
+              {t("providerForm.apiFormatOpenAIResponses", {
+                defaultValue: "OpenAI Responses API (需转换)",
+              })}
+            </SelectItem>
+            <SelectItem value="anthropic">
+              {t("providerForm.apiFormatAnthropic", {
+                defaultValue: "Anthropic Messages (需转换)",
+              })}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {t("providerForm.apiFormatHint", {
+            defaultValue: "选择供应商 API 的输入格式",
+          })}
+        </p>
+      </div>
 
       {/* Model 输入框 */}
       {shouldShowModelField && (

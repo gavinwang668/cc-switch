@@ -162,6 +162,11 @@ impl ProviderAdapter for GeminiAdapter {
         "Gemini"
     }
 
+    fn needs_transform(&self, provider: &Provider) -> bool {
+        let api_format = get_gemini_api_format(provider);
+        gemini_api_format_needs_transform(api_format)
+    }
+
     fn extract_base_url(&self, provider: &Provider) -> Result<String, ProxyError> {
         // 从 env 中获取
         if let Some(env) = provider.settings_config.get("env") {
@@ -254,6 +259,28 @@ impl ProviderAdapter for GeminiAdapter {
             )],
         })
     }
+}
+
+/// 获取 Gemini API 格式
+///
+/// 优先级：meta.geminiApiFormat > 默认 "gemini_native"
+pub fn get_gemini_api_format(provider: &Provider) -> &'static str {
+    if let Some(meta) = provider.meta.as_ref() {
+        if let Some(format) = meta.gemini_api_format.as_deref() {
+            return match format {
+                "openai_chat" => "openai_chat",
+                "openai_responses" => "openai_responses",
+                "anthropic" => "anthropic",
+                _ => "gemini_native",
+            };
+        }
+    }
+    "gemini_native"
+}
+
+/// 判断 Gemini API 格式是否需要转换
+pub fn gemini_api_format_needs_transform(api_format: &str) -> bool {
+    matches!(api_format, "openai_chat" | "openai_responses" | "anthropic")
 }
 
 #[cfg(test)]

@@ -270,7 +270,7 @@ export function ClaudeFormFields({
         showModelFetchResult(models.length);
       })
       .catch((err) => {
-        console.warn("[ModelFetch] Failed:", err);
+        console.error("[ModelFetch] Failed:", err);
         showFetchModelsError(err, t);
       })
       .finally(() => setIsFetchingModels(false));
@@ -301,7 +301,7 @@ export function ClaudeFormFields({
       })
       .catch((err) => {
         if (copilotModelsRequestRef.current !== requestId) return;
-        console.warn("[Copilot] Failed to fetch models:", err);
+        console.error("[Copilot] Failed to fetch models:", err);
         toast.error(
           t("copilot.loadModelsFailed", {
             defaultValue: "加载 Copilot 模型列表失败",
@@ -341,7 +341,7 @@ export function ClaudeFormFields({
       })
       .catch((err) => {
         if (codexOauthModelsRequestRef.current !== requestId) return;
-        console.warn("[CodexOAuth] Failed to fetch models:", err);
+        console.error("[CodexOAuth] Failed to fetch models:", err);
         showFetchModelsError(err, t);
       })
       .finally(() => {

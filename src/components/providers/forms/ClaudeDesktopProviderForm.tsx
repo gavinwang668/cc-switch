@@ -44,7 +44,7 @@ import { ModelDropdown } from "./shared/ModelDropdown";
 import { ProviderPresetSelector } from "./ProviderPresetSelector";
 import { providerSchema, type ProviderFormData } from "@/lib/schemas/provider";
 import type {
-  ClaudeApiFormat,
+  ClaudeDesktopApiFormat,
   ClaudeDesktopModelRoute,
   ProviderCategory,
   ProviderMeta,
@@ -257,8 +257,9 @@ export function ClaudeDesktopProviderForm({
   const initialMode = initialData?.meta?.claudeDesktopMode ?? "direct";
   const [mode, setMode] = useState<"direct" | "proxy">(initialMode);
   const needsModelMapping = mode === "proxy";
-  const [apiFormat, setApiFormat] = useState<ClaudeApiFormat>(
-    initialData?.meta?.apiFormat ?? "anthropic",
+  const [apiFormat, setApiFormat] = useState<ClaudeDesktopApiFormat>(
+    (initialData?.meta?.claudeDesktopApiFormat as ClaudeDesktopApiFormat) ??
+      "anthropic",
   );
   const [baseUrl, setBaseUrl] = useState(
     envString(initialData?.settingsConfig, "ANTHROPIC_BASE_URL"),
@@ -529,14 +530,14 @@ export function ClaudeDesktopProviderForm({
     }
     if (isOfficial) {
       // 官方供应商使用 Claude Desktop 内置 1P 模式，保持空 env 占位；
-      // 不写 claudeDesktopMode / claudeDesktopModelRoutes / apiFormat，
+      // 不写 claudeDesktopMode / claudeDesktopModelRoutes / claudeDesktopApiFormat，
       // 与启动 seed 的 OFFICIAL_SEEDS 占位语义一致。
       const settingsConfig = clonePlainRecord(initialData?.settingsConfig);
       settingsConfig.env = {};
       const meta: ProviderMeta = { ...(initialData?.meta ?? {}) };
       delete meta.claudeDesktopMode;
       delete meta.claudeDesktopModelRoutes;
-      delete meta.apiFormat;
+      delete meta.claudeDesktopApiFormat;
       delete meta.endpointAutoSelect;
       delete meta.isFullUrl;
       await onSubmit({
@@ -648,7 +649,7 @@ export function ClaudeDesktopProviderForm({
     const meta: ProviderMeta = {
       ...(initialData?.meta ?? {}),
       claudeDesktopMode: mode,
-      apiFormat: mode === "proxy" ? apiFormat : "anthropic",
+      claudeDesktopApiFormat: mode === "proxy" ? apiFormat : "anthropic",
     };
 
     meta.claudeDesktopModelRoutes = routeMap;
@@ -834,7 +835,7 @@ export function ClaudeDesktopProviderForm({
                   <Select
                     value={apiFormat}
                     onValueChange={(value) =>
-                      setApiFormat(value as ClaudeApiFormat)
+                      setApiFormat(value as ClaudeDesktopApiFormat)
                     }
                   >
                     <SelectTrigger className="w-full">
@@ -860,6 +861,11 @@ export function ClaudeDesktopProviderForm({
                         {t("providerForm.apiFormatGeminiNative", {
                           defaultValue:
                             "Gemini Native generateContent (需开启路由)",
+                        })}
+                      </SelectItem>
+                      <SelectItem value="bedrock">
+                        {t("providerForm.apiFormatBedrock", {
+                          defaultValue: "Amazon Bedrock (需开启路由)",
                         })}
                       </SelectItem>
                     </SelectContent>

@@ -3,6 +3,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { providersApi, settingsApi, openclawApi, type AppId } from "@/lib/api";
+import {
+  extractApiKeysFromProvider,
+  deleteProviderApiKeys,
+} from "@/lib/api/keychainHelpers";
 import type {
   Provider,
   UsageScript,
@@ -79,7 +83,12 @@ export function useProviderActions(
       },
     ) => {
       const enhanced = injectCodingPlanUsageScript(activeApp, provider);
-      await addProviderMutation.mutateAsync(enhanced);
+      // 安全存储：将 API Key 存入系统 Keychain，DB 仅存占位符
+      const secured = await extractApiKeysFromProvider(
+        enhanced as Provider,
+        activeApp,
+      );
+      await addProviderMutation.mutateAsync(secured);
 
       // OpenClaw: register models to allowlist after adding provider
       if (activeApp === "openclaw" && provider.suggestedDefaults) {
@@ -118,12 +127,8 @@ export function useProviderActions(
               { closeButton: true },
             );
           }
-        } catch (error) {
+        } catch {
           // Log warning but don't block main flow - provider config is already saved
-          console.warn(
-            "[OpenClaw] Failed to register models to allowlist:",
-            error,
-          );
         }
       }
     },
@@ -133,7 +138,12 @@ export function useProviderActions(
   // 更新供应商
   const updateProvider = useCallback(
     async (provider: Provider, originalId?: string) => {
-      await updateProviderMutation.mutateAsync({ provider, originalId });
+      // 安全存储：将 API Key 存入系统 Keychain，DB 仅存占位符
+      const secured = await extractApiKeysFromProvider(provider, activeApp);
+      await updateProviderMutation.mutateAsync({
+        provider: secured,
+        originalId,
+      });
 
       // 更新托盘菜单（失败不影响主操作）
       try {
@@ -285,9 +295,11 @@ export function useProviderActions(
   // 删除供应商
   const deleteProvider = useCallback(
     async (id: string) => {
+      // 同步删除 Keychain 中的 API Key 条目
+      await deleteProviderApiKeys(id, activeApp);
       await deleteProviderMutation.mutateAsync(id);
     },
-    [deleteProviderMutation],
+    [deleteProviderMutation, activeApp],
   );
 
   // 保存用量脚本
@@ -302,7 +314,12 @@ export function useProviderActions(
           },
         };
 
-        await providersApi.update(updatedProvider, activeApp);
+        // 安全存储：将 API Key 存入系统 Keychain
+        const secured = await extractApiKeysFromProvider(
+          updatedProvider,
+          activeApp,
+        );
+        await providersApi.update(secured, activeApp);
         await queryClient.invalidateQueries({
           queryKey: ["providers", activeApp],
         });

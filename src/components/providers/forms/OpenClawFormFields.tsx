@@ -152,7 +152,7 @@ export function OpenClawFormFields({
         }
       })
       .catch((err) => {
-        console.warn("[ModelFetch] Failed:", err);
+        console.error("[ModelFetch] Failed:", err);
         showFetchModelsError(err, t);
       })
       .finally(() => setIsFetchingModels(false));

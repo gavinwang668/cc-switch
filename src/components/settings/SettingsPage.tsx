@@ -52,6 +52,8 @@ import { UsageDashboard } from "@/components/usage/UsageDashboard";
 import { LogConfigPanel } from "@/components/settings/LogConfigPanel";
 import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
 import { CodexAuthSettings } from "@/components/settings/CodexAuthSettings";
+import { KeyboardShortcutsSettings } from "@/components/settings/KeyboardShortcutsSettings";
+import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { useInstalledSkills } from "@/hooks/useSkills";
 import { useSettings } from "@/hooks/useSettings";
 import { useImportExport } from "@/hooks/useImportExport";
@@ -288,6 +290,8 @@ export function SettingsPage({
                         handleAutoSave({ preferredTerminal: terminal })
                       }
                     />
+                    <KeyboardShortcutsSettings />
+                    <NotificationSettings />
                   </motion.div>
                 ) : null}
               </TabsContent>

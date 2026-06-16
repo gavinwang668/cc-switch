@@ -432,6 +432,21 @@ pub struct ProviderMeta {
     /// - "openai_responses": OpenAI Responses API 格式，需要转换
     #[serde(rename = "apiFormat", skip_serializing_if = "Option::is_none")]
     pub api_format: Option<String>,
+    /// Gemini API 格式（仅 Gemini 供应商使用）
+    /// - "gemini_native": 原生 Gemini generateContent API，直接透传
+    /// - "openai_chat": OpenAI Chat Completions 格式，需要转换
+    /// - "openai_responses": OpenAI Responses API 格式，需要转换
+    /// - "anthropic": Anthropic Messages 格式，需要转换
+    #[serde(rename = "geminiApiFormat", skip_serializing_if = "Option::is_none")]
+    pub gemini_api_format: Option<String>,
+    /// Claude Desktop API 格式（仅 Claude Desktop 供应商使用）
+    /// - "anthropic": 原生 Anthropic Messages API，直接透传
+    /// - "openai_chat": OpenAI Chat Completions 格式，需要转换
+    /// - "openai_responses": OpenAI Responses API 格式，需要转换
+    /// - "gemini_native": Gemini Native generateContent 格式，需要转换
+    /// - "bedrock": AWS Bedrock 格式，需要转换
+    #[serde(rename = "claudeDesktopApiFormat", skip_serializing_if = "Option::is_none")]
+    pub claude_desktop_api_format: Option<String>,
     /// 通用认证绑定（provider_config / managed_account）
     ///
     /// 新代码应只写入该字段；githubAccountId 仅保留兼容读取。

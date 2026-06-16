@@ -478,10 +478,7 @@ export function ProxyPanel({
                   })}
                 </p>
               </div>
-              <Tabs
-                defaultValue="claude"
-                className="w-full"
-              >
+              <Tabs defaultValue="claude" className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="claude">Claude</TabsTrigger>
                   <TabsTrigger value="codex">Codex</TabsTrigger>

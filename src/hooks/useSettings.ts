@@ -149,10 +149,6 @@ export function useSettings(): UseSettingsResult {
 
         const syncResult = await syncCurrentProvidersLiveSafe();
         if (!syncResult.ok) {
-          console.warn(
-            "[useSettings] Failed to sync providers after toggling Claude plugin",
-            syncResult.error,
-          );
           toast.error(
             t("notifications.syncClaudePluginFailed", {
               defaultValue: "同步 Claude 插件失败",
@@ -160,11 +156,7 @@ export function useSettings(): UseSettingsResult {
           );
         }
         return true;
-      } catch (error) {
-        console.warn(
-          "[useSettings] Failed to sync Claude plugin config",
-          error,
-        );
+      } catch {
         toast.error(
           t("notifications.syncClaudePluginFailed", {
             defaultValue: "同步 Claude 插件失败",
@@ -248,11 +240,7 @@ export function useSettings(): UseSettingsResult {
             } else {
               await settingsApi.clearClaudeOnboardingSkip();
             }
-          } catch (error) {
-            console.warn(
-              "[useSettings] Failed to sync Claude onboarding skip",
-              error,
-            );
+          } catch {
             toast.error(
               nextSkipClaudeOnboarding
                 ? t("notifications.skipClaudeOnboardingFailed", {
@@ -275,18 +263,15 @@ export function useSettings(): UseSettingsResult {
           if (typeof window !== "undefined" && updates.language) {
             window.localStorage.setItem("language", updates.language);
           }
-        } catch (error) {
-          console.warn(
-            "[useSettings] Failed to persist language preference",
-            error,
-          );
+        } catch {
+          // 静默失败
         }
 
         // 更新托盘菜单
         try {
           await providersApi.updateTrayMenu();
-        } catch (error) {
-          console.warn("[useSettings] Failed to refresh tray menu", error);
+        } catch {
+          // 静默失败
         }
 
         return { requiresRestart: false };
@@ -383,11 +368,7 @@ export function useSettings(): UseSettingsResult {
             } else {
               await settingsApi.clearClaudeOnboardingSkip();
             }
-          } catch (error) {
-            console.warn(
-              "[useSettings] Failed to sync Claude onboarding skip",
-              error,
-            );
+          } catch {
             toast.error(
               nextSkipClaudeOnboarding
                 ? t("notifications.skipClaudeOnboardingFailed", {
@@ -409,17 +390,14 @@ export function useSettings(): UseSettingsResult {
           if (typeof window !== "undefined" && payload.language) {
             window.localStorage.setItem("language", payload.language);
           }
-        } catch (error) {
-          console.warn(
-            "[useSettings] Failed to persist language preference",
-            error,
-          );
+        } catch {
+          // 静默失败
         }
 
         try {
           await providersApi.updateTrayMenu();
-        } catch (error) {
-          console.warn("[useSettings] Failed to refresh tray menu", error);
+        } catch {
+          // 静默失败
         }
 
         // 如果 Claude/Codex/Gemini/OpenCode/OpenClaw 的目录覆盖发生变化，则立即将"当前使用的供应商"写回对应应用的 live 配置
@@ -437,13 +415,7 @@ export function useSettings(): UseSettingsResult {
             opencodeDirChanged ||
             openclawDirChanged)
         ) {
-          const syncResult = await syncCurrentProvidersLiveSafe();
-          if (!syncResult.ok) {
-            console.warn(
-              "[useSettings] Failed to sync current providers after directory change",
-              syncResult.error,
-            );
-          }
+          await syncCurrentProvidersLiveSafe();
         }
 
         const appDirChanged = sanitizedAppDir !== (previousAppDir ?? undefined);

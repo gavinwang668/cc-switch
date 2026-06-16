@@ -40,7 +40,9 @@ export interface ShortcutGroup {
 
 function isMacLike() {
   if (typeof navigator === "undefined") return false;
-  return /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || "");
+  return /Mac|iPhone|iPad/i.test(
+    navigator.platform || navigator.userAgent || "",
+  );
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -120,10 +122,7 @@ export function useKeyboardShortcuts(
 
       for (const spec of list) {
         if (!matchesShortcut(event, spec, mac)) continue;
-        if (
-          (spec.disableInInputs ?? true) &&
-          isEditableTarget(event.target)
-        ) {
+        if ((spec.disableInInputs ?? true) && isEditableTarget(event.target)) {
           continue;
         }
         const ret = spec.action(event);

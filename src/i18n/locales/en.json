@@ -1729,6 +1729,20 @@
       "deleteTitle": "Delete MCP Server",
       "deleteMessage": "Are you sure you want to delete MCP server \"{{id}}\"? This action cannot be undone."
     },
+    "test": {
+      "title": "Connection Test",
+      "button": "Test Connection",
+      "testing": "Testing...",
+      "success": "Connected",
+      "failed": "Failed",
+      "successTitle": "Connection test successful",
+      "failedTitle": "Connection test failed",
+      "transport": "Transport",
+      "message": "Message",
+      "error": "Error",
+      "stderr": "Stderr",
+      "clear": "Clear result"
+    },
     "presets": {
       "title": "Select MCP Type",
       "enable": "Enable",

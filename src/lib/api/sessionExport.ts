@@ -39,9 +39,7 @@ function formatSessionAsMarkdown(
     meta.push(`- Created: ${new Date(session.createdAt).toISOString()}`);
   }
   if (session.lastActiveAt) {
-    meta.push(
-      `- Last Active: ${new Date(session.lastActiveAt).toISOString()}`,
-    );
+    meta.push(`- Last Active: ${new Date(session.lastActiveAt).toISOString()}`);
   }
   lines.push(...meta);
   lines.push("");
@@ -51,9 +49,7 @@ function formatSessionAsMarkdown(
   // 消息主体
   for (const message of messages) {
     const role = (message.role || "unknown").toUpperCase();
-    const ts = message.ts
-      ? ` (${new Date(message.ts).toISOString()})`
-      : "";
+    const ts = message.ts ? ` (${new Date(message.ts).toISOString()})` : "";
     lines.push(`## ${role}${ts}`);
     lines.push("");
     const content = message.content?.trim() ?? "";
@@ -81,10 +77,7 @@ function formatSessionAsMarkdown(
 /**
  * 将会话格式化为 JSON。
  */
-function formatSessionAsJson(
-  session: SessionMeta,
-  messages: SessionMessage[],
-) {
+function formatSessionAsJson(session: SessionMeta, messages: SessionMessage[]) {
   return {
     sessionId: session.sessionId,
     providerId: session.providerId,
@@ -106,7 +99,10 @@ function formatSessionAsJson(
   };
 }
 
-function suggestFileName(format: ExportFormat, sessions: SessionMeta[]): string {
+function suggestFileName(
+  format: ExportFormat,
+  sessions: SessionMeta[],
+): string {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   if (sessions.length === 1) {
     const base = (sessions[0].title || sessions[0].sessionId || "session")
@@ -178,8 +174,11 @@ export async function buildSessionExport(options: ExportOptions): Promise<{
 /**
  * 触发系统保存对话框并将内容写入磁盘。
  */
-export async function exportSessions(options: ExportOptions): Promise<ExportResult | null> {
-  const { content, fileName, totalMessages } = await buildSessionExport(options);
+export async function exportSessions(
+  options: ExportOptions,
+): Promise<ExportResult | null> {
+  const { content, fileName, totalMessages } =
+    await buildSessionExport(options);
   const filters =
     options.format === "markdown"
       ? [{ name: "Markdown", extensions: ["md", "markdown"] }]
