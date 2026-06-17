@@ -600,6 +600,7 @@ export function ClaudeFormFields({
           category={category}
           shouldShowLink={shouldShowApiKeyLink}
           websiteUrl={websiteUrl}
+          baseUrl={baseUrl}
           isPartner={isPartner}
           partnerPromotionKey={partnerPromotionKey}
         />

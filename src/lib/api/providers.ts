@@ -197,6 +197,23 @@ export const providersApi = {
   async importHermesFromLive(): Promise<number> {
     return await invoke("import_hermes_providers_from_live");
   },
+
+  /**
+   * 验证 Provider 的 API Key 是否有效。
+   *
+   * 通过发送 `Authorization: Bearer <key>` 和 `x-api-key` 头依次访问
+   * `{baseUrl}/v1/models`、`/models`、`/health`、根路径，200-299 视为成功。
+   *
+   * - `Ok(true)`: API Key 有效
+   * - `Ok(false)`: API Key 无效（401/403）
+   * - `Err(msg)`: 所有端点不可达或参数错误
+   */
+  async verifyApiKey(baseUrl: string, apiKey: string): Promise<boolean> {
+    return await invoke<boolean>("verify_api_key", {
+      baseUrl,
+      apiKey,
+    });
+  },
 };
 
 // ============================================================================

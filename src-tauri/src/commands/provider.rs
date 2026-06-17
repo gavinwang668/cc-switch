@@ -695,6 +695,81 @@ pub async fn test_api_endpoints(
         .map_err(|e| e.to_string())
 }
 
+/// 验证 Provider 的 API Key 是否有效。
+///
+/// 依次尝试 `{baseUrl}/v1/models`、`/models`、`/health`、根路径，
+/// 发送 `Authorization: Bearer <key>` 与 `x-api-key` 头。
+/// - 200-299 视为成功（Ok(true)）
+/// - 401/403 视为鉴权失败（Ok(false)）
+/// - 其他情况视为端点不可达，继续尝试下一个端点
+#[tauri::command]
+pub async fn verify_api_key(
+    #[allow(non_snake_case)] baseUrl: String,
+    #[allow(non_snake_case)] apiKey: String,
+    #[allow(non_snake_case)] timeoutSecs: Option<u64>,
+) -> Result<bool, String> {
+    use std::time::Duration;
+
+    let base = baseUrl.trim_end_matches('/').to_string();
+    if base.is_empty() {
+        return Err("baseUrl 不能为空".to_string());
+    }
+    if apiKey.is_empty() {
+        return Err("apiKey 不能为空".to_string());
+    }
+
+    let timeout = Duration::from_secs(timeoutSecs.unwrap_or(10));
+    let client = reqwest::Client::builder()
+        .timeout(timeout)
+        .build()
+        .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
+
+    let candidate_paths = [
+        "/v1/models",
+        "/models",
+        "/health",
+        "/",
+    ];
+
+    let mut auth_failed = false;
+
+    for path in candidate_paths {
+        let url = format!("{base}{path}");
+        let response = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {apiKey}"))
+            .header("x-api-key", &apiKey)
+            .header("Accept", "application/json")
+            .send()
+            .await;
+
+        match response {
+            Ok(resp) => {
+                let status = resp.status();
+                if status.is_success() {
+                    return Ok(true);
+                }
+                if status.as_u16() == 401 || status.as_u16() == 403 {
+                    auth_failed = true;
+                    // 鉴权失败可立即返回，无需继续尝试
+                    return Ok(false);
+                }
+                // 其他状态码继续尝试下一个端点
+            }
+            Err(_) => {
+                // 网络/超时错误继续尝试下一个端点
+                continue;
+            }
+        }
+    }
+
+    if auth_failed {
+        Ok(false)
+    } else {
+        Err("Unable to verify API key: all endpoints unreachable".to_string())
+    }
+}
+
 #[tauri::command]
 pub fn get_custom_endpoints(
     state: State<'_, AppState>,

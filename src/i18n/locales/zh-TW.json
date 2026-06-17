@@ -965,6 +965,14 @@
     "omoHint": "OMO 設定管理 Agent 模型指派，相容 oh-my-openagent.jsonc / oh-my-opencode.jsonc",
     "officialHint": "官方供應商使用瀏覽器登入，無需設定 API Key",
     "getApiKey": "取得 API Key",
+    "verifyKey": "驗證 Key",
+    "verifyKeyTooltip": "向伺服器發送請求以驗證 API Key 是否有效",
+    "verifyKeySuccess": "API Key 驗證成功",
+    "verifyKeySuccessShort": "已驗證",
+    "verifyKeyFailed": "API Key 驗證失敗：{{error}}",
+    "verifyKeyFailedShort": "驗證失敗",
+    "verifyKeyAuthFailed": "API Key 無效或權限不足",
+    "verifyKeyMissingInput": "請先填寫 API Key 與請求位址",
     "partnerPromotion": {
       "packycode": "PackyCode 是 CC Switch 的官方合作夥伴，使用此連結註冊並在儲值時填寫「cc-switch」優惠碼，可以享受 9 折優惠",
       "apikeyfun": "APIKEY.FUN 為 CC Switch 的使用者提供了特別優惠，透過專屬連結註冊，可享受最高儲值永久 95 折優惠。",
@@ -1254,8 +1262,14 @@
     "reasoningEffortToggle": "支援思考等級",
     "reasoningEffortHint": "上游支援 low/high/max 等思考深度控制時啟用。啟用後會自動啟用思考模式，並把 Codex 的 reasoning.effort 轉成上游 Chat 參數。",
     "reasoningGroupTitle": "思考能力",
+    "reasoningSectionToggle": "思考能力（高級·通常自動識別）",
     "reasoningSectionHint": "預設供應商已自動設定；自訂供應商會按名稱/位址自動推斷。僅當自動識別不準時才需手動覆寫。",
-    "advancedSectionHint": "包含本地路由映射、模型映射、思考能力與自訂 User-Agent。供應商使用 Chat Completions 協定或非 GPT 模型時，需在此開啟本地路由映射。"
+    "advancedSectionHint": "包含本地路由映射、模型映射、思考能力與自訂 User-Agent。供應商使用 Chat Completions 協定或非 GPT 模型時，需在此開啟本地路由映射。",
+    "apiFormatLabel": "API 格式",
+    "apiFormatResponses": "OpenAI Responses API",
+    "apiFormatChat": "OpenAI Chat Completions",
+    "apiFormatChatHint": "Codex 目前僅原生支援 OpenAI Responses API 與 GPT 系列模型；如果您的供應商使用 Chat Completions 協議或非 GPT 模型（如 DeepSeek、Kimi），請選擇此選項並保持本地路由開啟。",
+    "apiFormatResponsesHint": "如果您的供應商不是原生 OpenAI Responses API，或者模型名不是 Codex 預設的 GPT 系列，請選擇 Chat Completions。"
   },
   "geminiConfig": {
     "envFile": "環境變數 (.env)",

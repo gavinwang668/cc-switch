@@ -5,6 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ProviderIcon } from "@/components/ProviderIcon";
@@ -148,6 +155,8 @@ export function UniversalProviderFormModal({
     if (!codexEnabled) return null;
     const model = models.codex?.model || "gpt-5.5";
     const reasoningEffort = models.codex?.reasoningEffort || "high";
+    const apiFormat = models.codex?.apiFormat || "openai_responses";
+    const wireApi = apiFormat === "openai_chat" ? "chat_completions" : "responses";
     // 确保 base_url 以 /v1 结尾（Codex 使用 OpenAI 兼容 API）
     const codexBaseUrl = baseUrl.endsWith("/v1")
       ? baseUrl
@@ -160,7 +169,7 @@ disable_response_storage = true
 [model_providers.custom]
 name = "NewAPI"
 base_url = "${codexBaseUrl}"
-wire_api = "responses"
+wire_api = "${wireApi}"
 requires_openai_auth = true`;
     return {
       auth: {
@@ -583,6 +592,32 @@ requires_openai_auth = true`;
                 Codex
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">API 格式</Label>
+                  <Select
+                    value={models.codex?.apiFormat || "openai_responses"}
+                    onValueChange={(value) =>
+                      updateModel("codex", "apiFormat", value)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="openai_responses">
+                        Responses API
+                      </SelectItem>
+                      <SelectItem value="openai_chat">
+                        Chat Completions
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {models.codex?.apiFormat === "openai_chat"
+                      ? "需要本地路由转换，支持 DeepSeek、Kimi 等"
+                      : "原生支持 GPT 系列模型"}
+                  </p>
+                </div>
                 <div className="space-y-1">
                   <Label className="text-xs">
                     {t("universalProvider.model", { defaultValue: "模型" })}

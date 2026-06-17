@@ -994,6 +994,14 @@
     "omoHint": "💡 OMO config manages Agent model assignments and supports both oh-my-openagent.jsonc and oh-my-opencode.jsonc",
     "officialHint": "💡 Official provider uses browser login, no API Key needed",
     "getApiKey": "Get API Key",
+    "verifyKey": "Verify Key",
+    "verifyKeyTooltip": "Send a request to the server to verify whether the API Key is valid",
+    "verifyKeySuccess": "API Key verified successfully",
+    "verifyKeySuccessShort": "Verified",
+    "verifyKeyFailed": "API Key verification failed: {{error}}",
+    "verifyKeyFailedShort": "Failed",
+    "verifyKeyAuthFailed": "API Key is invalid or lacks permission",
+    "verifyKeyMissingInput": "Please fill in both API Key and endpoint URL",
     "partnerPromotion": {
       "packycode": "PackyCode is an official partner of CC Switch. Register using this link and enter \"cc-switch\" promo code during recharge to get 10% off",
       "apikeyfun": "APIKEY.FUN offers a special deal for CC Switch users. Register through the exclusive link to enjoy up to permanent 5% off top-ups.",
@@ -1282,8 +1290,14 @@
     "reasoningEffortToggle": "Supports Reasoning Effort",
     "reasoningEffortHint": "Enable when the upstream supports thinking-depth control such as low/high/max. Enabling this also turns on thinking mode and converts Codex's reasoning.effort into the upstream Chat parameter.",
     "reasoningGroupTitle": "Reasoning Capability",
+    "reasoningSectionToggle": "Reasoning Capability (Advanced · usually auto-detected)",
     "reasoningSectionHint": "Preset providers are configured automatically; custom providers are inferred from name/URL. Override manually only when auto-detection is wrong.",
-    "advancedSectionHint": "Includes local routing, model mapping, reasoning overrides and custom User-Agent. Enable local routing here when your provider uses the Chat Completions protocol or non-GPT models."
+    "advancedSectionHint": "Includes local routing, model mapping, reasoning overrides and custom User-Agent. Enable local routing here when your provider uses the Chat Completions protocol or non-GPT models.",
+    "apiFormatLabel": "API Format",
+    "apiFormatResponses": "OpenAI Responses API",
+    "apiFormatChat": "OpenAI Chat Completions",
+    "apiFormatChatHint": "Codex currently only natively supports OpenAI Responses API and GPT series models. If your provider uses Chat Completions protocol or non-GPT models (such as DeepSeek, Kimi), select this option and keep local routing enabled.",
+    "apiFormatResponsesHint": "If your provider is not native OpenAI Responses API, or the model name is not Codex's default GPT series, select Chat Completions."
   },
   "geminiConfig": {
     "envFile": "Environment Variables (.env)",

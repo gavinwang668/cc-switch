@@ -16,6 +16,10 @@ import type {
 import type { OpenClawSuggestedDefaults } from "@/config/openclawProviderPresets";
 import { injectCodingPlanUsageScript } from "@/config/codingPlanProviders";
 import {
+  extractApiKeysFromProvider,
+  deleteProviderApiKeys,
+} from "@/lib/api/keychainHelpers";
+import {
   useAddProviderMutation,
   useUpdateProviderMutation,
   useDeleteProviderMutation,

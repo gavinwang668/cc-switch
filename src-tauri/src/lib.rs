@@ -1234,6 +1234,7 @@ pub fn run() {
             commands::fetch_models_for_config,
             // ours: endpoint speed test + custom endpoint management
             commands::test_api_endpoints,
+            commands::verify_api_key,
             commands::get_custom_endpoints,
             commands::add_custom_endpoint,
             commands::remove_custom_endpoint,
@@ -1356,6 +1357,10 @@ pub fn run() {
             commands::get_usage_data_sources,
             // Stream health check
             commands::stream_check_provider,
+            // Keychain (API Key 安全存储)
+            commands::set_api_key_cmd,
+            commands::get_api_key_cmd,
+            commands::delete_api_key_cmd,
             commands::stream_check_all_providers,
             commands::get_stream_check_config,
             commands::save_stream_check_config,

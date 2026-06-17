@@ -994,6 +994,14 @@
     "omoHint": "💡 OMO 設定は Agent のモデル割り当てを管理し、oh-my-openagent.jsonc / oh-my-opencode.jsonc の両方に対応します",
     "officialHint": "💡 公式プロバイダーはブラウザログインで、API Key は不要です",
     "getApiKey": "API Key を取得",
+    "verifyKey": "Key を検証",
+    "verifyKeyTooltip": "サーバーにリクエストを送信して API Key が有効かどうかを検証します",
+    "verifyKeySuccess": "API Key の検証に成功しました",
+    "verifyKeySuccessShort": "検証済み",
+    "verifyKeyFailed": "API Key の検証に失敗しました：{{error}}",
+    "verifyKeyFailedShort": "検証失敗",
+    "verifyKeyAuthFailed": "API Key が無効または権限が不足しています",
+    "verifyKeyMissingInput": "API Key とエンドポイント URL を入力してください",
     "partnerPromotion": {
       "packycode": "PackyCode は CC Switch の公式パートナーです。登録後チャージ時に \"cc-switch\" を入力すると 10% オフ",
       "apikeyfun": "APIKEY.FUN は CC Switch ユーザー向けに特別優待を提供しています。専用リンクから登録すると、最大でチャージ永久 5% オフを受けられます。",
@@ -1282,8 +1290,14 @@
     "reasoningEffortToggle": "思考レベルに対応",
     "reasoningEffortHint": "上流が low/high/max などの思考の深さの制御に対応している場合に有効化します。有効にすると思考モードも自動的にオンになり、Codex の reasoning.effort を上流の Chat パラメータに変換します。",
     "reasoningGroupTitle": "思考能力",
+    "reasoningSectionToggle": "思考能力（詳細・通常は自動識別）",
     "reasoningSectionHint": "プリセットの供給元は自動的に設定され、カスタム供給元は名前/URL から自動推論されます。自動識別が正しくない場合のみ手動で上書きしてください。",
-    "advancedSectionHint": "ローカルルーティング、モデルマッピング、思考能力、カスタム User-Agent の設定を含みます。供給元が Chat Completions プロトコルまたは GPT 以外のモデルを使用する場合は、ここでローカルルーティングを有効にしてください。"
+    "advancedSectionHint": "ローカルルーティング、モデルマッピング、思考能力、カスタム User-Agent の設定を含みます。供給元が Chat Completions プロトコルまたは GPT 以外のモデルを使用する場合は、ここでローカルルーティングを有効にしてください。",
+    "apiFormatLabel": "API 形式",
+    "apiFormatResponses": "OpenAI Responses API",
+    "apiFormatChat": "OpenAI Chat Completions",
+    "apiFormatChatHint": "Codex は現在、OpenAI Responses API と GPT シリーズモデルのみをネイティブにサポートしています。上流の供給元が Chat Completions プロトコルまたは DeepSeek、Kimi などの非 GPT モデルを使用する場合は、このオプションを選択してローカルルーティングを有効にしてください。",
+    "apiFormatResponsesHint": "供給元がネイティブの OpenAI Responses API でない場合、またはモデル名が Codex のデフォルトの GPT シリーズでない場合は、Chat Completions を選択してください。"
   },
   "geminiConfig": {
     "envFile": "環境変数 (.env)",

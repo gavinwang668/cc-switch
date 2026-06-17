@@ -37,3 +37,6 @@ copilot-api
 CODEBUDDY.md
 .github
 mainWindow.js
+.codebuddy/
+.trae/
+.workbuddy/
