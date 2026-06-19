@@ -2,16 +2,27 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { McpConnectionTest } from "@/components/mcp/McpConnectionTest";
 import type { McpConnectionTestResult } from "@/types/mcp";
+import type { TestStatus } from "@/hooks/useMcpConnectionTest";
 
 // Mock useMcpConnectionTest hook
 const mockTestConnection = vi.fn();
 const mockResetTest = vi.fn();
-const mockUseMcpConnectionTest = vi.fn(() => ({
-  testStatus: "idle" as const,
-  testResult: null,
-  testConnection: mockTestConnection,
-  resetTest: mockResetTest,
-}));
+
+interface MockHookReturn {
+  testStatus: TestStatus;
+  testResult: McpConnectionTestResult | null;
+  testConnection: typeof mockTestConnection;
+  resetTest: typeof mockResetTest;
+}
+
+const mockUseMcpConnectionTest = vi.fn(
+  (): MockHookReturn => ({
+    testStatus: "idle",
+    testResult: null,
+    testConnection: mockTestConnection,
+    resetTest: mockResetTest,
+  }),
+);
 
 vi.mock("@/hooks/useMcpConnectionTest", () => ({
   useMcpConnectionTest: () => mockUseMcpConnectionTest(),
@@ -28,7 +39,7 @@ describe("McpConnectionTest", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseMcpConnectionTest.mockReturnValue({
-      testStatus: "idle" as const,
+      testStatus: "idle",
       testResult: null,
       testConnection: mockTestConnection,
       resetTest: mockResetTest,
@@ -53,7 +64,7 @@ describe("McpConnectionTest", () => {
 
   it("disables button during testing", () => {
     mockUseMcpConnectionTest.mockReturnValue({
-      testStatus: "testing" as const,
+      testStatus: "testing",
       testResult: null,
       testConnection: mockTestConnection,
       resetTest: mockResetTest,
@@ -67,7 +78,7 @@ describe("McpConnectionTest", () => {
 
   it("shows success badge when test succeeds", () => {
     mockUseMcpConnectionTest.mockReturnValue({
-      testStatus: "success" as const,
+      testStatus: "success",
       testResult: {
         success: true,
         durationMs: 150,
@@ -85,7 +96,7 @@ describe("McpConnectionTest", () => {
 
   it("shows error badge when test fails", () => {
     mockUseMcpConnectionTest.mockReturnValue({
-      testStatus: "error" as const,
+      testStatus: "error",
       testResult: {
         success: false,
         durationMs: 500,
@@ -102,7 +113,7 @@ describe("McpConnectionTest", () => {
 
   it("shows clear button when test result exists", () => {
     mockUseMcpConnectionTest.mockReturnValue({
-      testStatus: "success" as const,
+      testStatus: "success",
       testResult: {
         success: true,
         durationMs: 150,
@@ -122,7 +133,7 @@ describe("McpConnectionTest", () => {
 
   it("formats duration correctly for milliseconds", () => {
     mockUseMcpConnectionTest.mockReturnValue({
-      testStatus: "success" as const,
+      testStatus: "success",
       testResult: {
         success: true,
         durationMs: 450,
@@ -138,7 +149,7 @@ describe("McpConnectionTest", () => {
 
   it("formats duration correctly for seconds", () => {
     mockUseMcpConnectionTest.mockReturnValue({
-      testStatus: "success" as const,
+      testStatus: "success",
       testResult: {
         success: true,
         durationMs: 2500,

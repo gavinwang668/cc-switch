@@ -48,13 +48,14 @@ pub struct ProxyState {
     pub app_handle: Option<tauri::AppHandle>,
     /// 故障转移切换管理器
     pub failover_manager: Arc<FailoverSwitchManager>,
+    /// 共享的 shutdown 信号发送端，允许 HTTP handler（如 POST /stop）触发服务器停止
+    pub shutdown_tx: Arc<RwLock<Option<oneshot::Sender<()>>>>,
 }
 
 /// 代理HTTP服务器
 pub struct ProxyServer {
     config: ProxyConfig,
     state: ProxyState,
-    shutdown_tx: Arc<RwLock<Option<oneshot::Sender<()>>>>,
     /// 服务器任务句柄，用于等待服务器实际关闭
     server_handle: Arc<RwLock<Option<JoinHandle<()>>>>,
 }
@@ -69,6 +70,8 @@ impl ProxyServer {
         let provider_router = Arc::new(ProviderRouter::new(db.clone()));
         // 创建故障转移切换管理器
         let failover_manager = Arc::new(FailoverSwitchManager::new(db.clone()));
+        // 共享的 shutdown 信号（state 和 server 引用同一 Arc）
+        let shutdown_tx: Arc<RwLock<Option<oneshot::Sender<()>>>> = Arc::new(RwLock::new(None));
 
         let state = ProxyState {
             db,
@@ -81,19 +84,19 @@ impl ProxyServer {
             codex_chat_history: Arc::new(CodexChatHistoryStore::default()),
             app_handle,
             failover_manager,
+            shutdown_tx: shutdown_tx.clone(),
         };
 
         Self {
             config,
             state,
-            shutdown_tx: Arc::new(RwLock::new(None)),
             server_handle: Arc::new(RwLock::new(None)),
         }
     }
 
     pub async fn start(&self) -> Result<ProxyServerInfo, ProxyError> {
         // 检查是否已在运行
-        if self.shutdown_tx.read().await.is_some() {
+        if self.state.shutdown_tx.read().await.is_some() {
             return Err(ProxyError::AlreadyRunning);
         }
 
@@ -123,7 +126,7 @@ impl ProxyServer {
         crate::proxy::http_client::set_proxy_port(actual_port);
 
         // 保存关闭句柄
-        *self.shutdown_tx.write().await = Some(shutdown_tx);
+        *self.state.shutdown_tx.write().await = Some(shutdown_tx);
 
         // 更新状态
         let mut status = self.state.status.write().await;
@@ -224,7 +227,7 @@ impl ProxyServer {
 
     pub async fn stop(&self) -> Result<(), ProxyError> {
         // 1. 发送关闭信号
-        if let Some(tx) = self.shutdown_tx.write().await.take() {
+        if let Some(tx) = self.state.shutdown_tx.write().await.take() {
             let _ = tx.send(());
         } else {
             return Err(ProxyError::NotRunning);
@@ -293,6 +296,8 @@ impl ProxyServer {
             // 健康检查
             .route("/health", get(handlers::health_check))
             .route("/status", get(handlers::get_status))
+            // 远程停止服务器（CLI `stop` 命令调用）
+            .route("/stop", post(handlers::stop_server))
             // Claude API (支持带前缀和不带前缀两种格式)
             .route("/v1/messages", post(handlers::handle_messages))
             .route("/claude/v1/messages", post(handlers::handle_messages))

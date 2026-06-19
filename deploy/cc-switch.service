@@ -1,0 +1,32 @@
+[Unit]
+Description=CC Switch Headless Proxy Server
+Documentation=https://github.com/farion1231/cc-switch
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 使用 cc-switch-cli daemon 启动后台代理服务器
+# 如需修改监听地址/端口，使用环境变量 CC_SWITCH_LISTEN 和 CC_SWITCH_PORT
+ExecStart=/usr/bin/cc-switch-cli daemon
+# 优雅停止：发送 SIGTERM，CLI 会恢复 Live 配置后退出
+KillSignal=SIGTERM
+TimeoutStopSec=10
+Restart=on-failure
+RestartSec=5
+# 运行用户（建议创建专用用户而非 root）
+User=ccswitch
+Group=ccswitch
+# 工作目录
+WorkingDirectory=/home/ccswitch
+# 环境变量示例（按需取消注释）
+#Environment=CC_SWITCH_LISTEN=0.0.0.0
+#Environment=CC_SWITCH_PORT=9090
+#Environment=RUST_LOG=info
+# 日志输出到 journalctl
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cc-switch
+
+[Install]
+WantedBy=multi-user.target

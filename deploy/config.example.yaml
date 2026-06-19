@@ -1,0 +1,62 @@
+# CC Switch 声明式配置文件示例
+#
+# 用法:
+#   cc-switch-cli validate config.yaml     # 校验配置
+#   cc-switch-cli apply-config config.yaml # 应用配置到数据库
+#
+# 所有字段均为可选，只配置需要的部分即可。
+
+# ─── 代理服务器 ───────────────────────────────────────
+proxy:
+  listen: "127.0.0.1"      # 监听地址
+  port: 9090                # 监听端口
+  takeover:                 # 代理接管（仅 claude/codex/gemini）
+    claude: true
+    codex: true
+    gemini: false
+
+# ─── 供应商列表 ───────────────────────────────────────
+providers:
+  - app: claude
+    id: my-anthropic
+    name: "My Anthropic"
+    env:
+      ANTHROPIC_API_KEY: "sk-ant-xxxxx"
+      ANTHROPIC_BASE_URL: "https://api.anthropic.com"
+    current: true           # 设为当前供应商
+
+  - app: claude
+    id: backup-provider
+    name: "Backup Provider"
+    env:
+      ANTHROPIC_API_KEY: "sk-ant-yyyyy"
+      ANTHROPIC_BASE_URL: "https://backup.example.com"
+
+  - app: codex
+    id: my-openai
+    name: "My OpenAI"
+    env:
+      OPENAI_API_KEY: "sk-xxxxx"
+      OPENAI_BASE_URL: "https://api.openai.com"
+    current: true
+
+# ─── 故障转移 ─────────────────────────────────────────
+failover:
+  auto: true                # 全局开启自动故障转移
+  queue:                    # 按 app 配置故障转移队列
+    claude:
+      - my-anthropic
+      - backup-provider
+
+# ─── 全局出站代理 ─────────────────────────────────────
+# global_proxy:
+#   url: "socks5://127.0.0.1:1080"
+
+# ─── 设备级设置 ───────────────────────────────────────
+settings:
+  language: "zh"            # en / zh / zh-TW / ja
+  backup_interval_hours: 24 # 自动备份间隔（0=禁用）
+  backup_retain_count: 10   # 备份保留数量
+  # claude_config_dir: "~/.claude"
+  # codex_config_dir: "~/.codex"
+  # gemini_config_dir: "~/.gemini"

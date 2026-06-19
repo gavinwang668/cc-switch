@@ -33,9 +33,9 @@ tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-process = "2"
 tauri-plugin-updater = "2"
-tauri-plugin-dialog = "2"
 tauri-plugin-store = "2"
 tauri-plugin-deep-link = "2"
+tauri-plugin-dialog = "2"
 tauri-plugin-window-state = "2"
 dirs = "5.0"
 toml = "0.8"
@@ -79,17 +79,27 @@ rust_decimal = "1.33"
 uuid = { version = "1.11", features = ["v4"] }
 sha2 = "0.10"
 hmac = "0.12"
-keyring = { version = "3.6", features = ["windows-native"] }
 json5 = "0.4"
 json-five = "0.3.1"
 clap = { version = "4.5", features = ["derive"] }
+env_logger = "0.11"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+keyring = { version = "3.6", features = ["windows-native"] }
+
+# tauri-plugin-dialog 在所有平台声明为依赖（非 target-specific），
+# 以确保 Tauri capabilities 中的 dialog:default 权限在编译时可用。
+# Linux 上虽然不注册该插件，但权限 schema 仍需存在。
+
+[target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "2"
 
 [[bin]]
 name = "cc-switch-cli"
 path = "src/bin/cc-switch-cli.rs"
-
-[target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
-tauri-plugin-single-instance = "2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { version = "2.0.1", features = ["v2_16"] }

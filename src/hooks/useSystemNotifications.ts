@@ -24,7 +24,7 @@ export type NotificationPermissionState =
   | "denied"
   | "unsupported";
 
-interface UseSystemNotificationResult {
+interface UseSystemNotificationsResult {
   /** 当前通知权限状态 */
   permission: NotificationPermissionState;
   /** 是否已请求过权限（避免重复弹窗） */
@@ -85,7 +85,7 @@ const LEVEL_TO_SONNER: Record<NotificationLevel, string> = {
  * - 优先使用 Web Notification API（在 Tauri WebView 中会显示为原生通知）
  * - 不支持 / 未授权时回退为应用内 Sonner toast
  */
-export function useSystemNotification(): UseSystemNotificationResult {
+export function useSystemNotifications(): UseSystemNotificationsResult {
   const [permission, setPermission] = useState<NotificationPermissionState>(
     () => detectSupport(),
   );

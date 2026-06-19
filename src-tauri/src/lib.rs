@@ -41,9 +41,11 @@ pub use app_config::{AppType, InstalledSkill, McpApps, McpServer, MultiAppConfig
 pub use codex_config::{get_codex_auth_path, get_codex_config_path, write_codex_live_atomic};
 pub use commands::open_provider_terminal;
 pub use commands::*;
-pub use config::{get_claude_mcp_path, get_claude_settings_path, read_json_file};
+pub use config::{get_app_config_dir, get_claude_mcp_path, get_claude_settings_path, read_json_file};
 pub use database::Database;
 pub use proxy::{ProxyConfig, ProxyStatus, server::ProxyServer};
+pub use proxy::circuit_breaker::CircuitBreakerConfig;
+pub use proxy::http_client;
 pub use deeplink::{import_provider_from_deeplink, parse_deeplink_url, DeepLinkImportRequest};
 pub use error::AppError;
 pub use mcp::{
@@ -58,7 +60,7 @@ pub use services::{
     ConfigService, EndpointLatency, McpService, PromptService, ProviderService, ProxyService,
     SkillService, SpeedtestService,
 };
-pub use settings::{update_settings, AppSettings};
+pub use settings::{get_settings, update_settings, AppSettings};
 pub use store::AppState;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
@@ -291,9 +293,13 @@ pub fn run() {
                 }
             }
         })
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init());
+
+        #[cfg(not(target_os = "linux"))]
+        let builder = builder.plugin(tauri_plugin_dialog::init());
+
+        let builder = builder
+            .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(
             tauri_plugin_window_state::Builder::default()
@@ -386,12 +392,19 @@ pub fn run() {
                         Err(e) => {
                             log::error!("加载旧配置文件失败: {e}");
                             // 弹出系统对话框让用户选择
+                            #[cfg(not(target_os = "linux"))]
                             if !show_migration_error_dialog(app.handle(), &e.to_string()) {
                                 // 用户选择退出（此时数据库还没创建，下次启动可以重试）
                                 log::info!("用户选择退出程序");
                                 std::process::exit(1);
                             }
+                            #[cfg(target_os = "linux")]
+                            {
+                                log::error!("Linux 无头模式：无法显示迁移错误对话框，退出程序");
+                                std::process::exit(1);
+                            }
                             // 用户选择重试，继续循环
+                            #[cfg(not(target_os = "linux"))]
                             log::info!("用户选择重试加载配置文件");
                         }
                     }
@@ -411,12 +424,19 @@ pub fn run() {
                     Err(e) => {
                         log::error!("Failed to init database: {e}");
 
+                        #[cfg(not(target_os = "linux"))]
                         if !show_database_init_error_dialog(app.handle(), &db_path, &e.to_string())
                         {
                             log::info!("用户选择退出程序");
                             std::process::exit(1);
                         }
+                        #[cfg(target_os = "linux")]
+                        {
+                            log::error!("Linux 无头模式：无法显示数据库初始化错误对话框，退出程序");
+                            std::process::exit(1);
+                        }
 
+                        #[cfg(not(target_os = "linux"))]
                         log::info!("用户选择重试初始化数据库");
                     }
                 }
@@ -1257,8 +1277,11 @@ pub fn run() {
             commands::s3_sync_download,
             commands::s3_sync_save_settings,
             commands::s3_sync_fetch_remote_info,
+            #[cfg(not(target_os = "linux"))]
             commands::save_file_dialog,
+            #[cfg(not(target_os = "linux"))]
             commands::open_file_dialog,
+            #[cfg(not(target_os = "linux"))]
             commands::open_zip_file_dialog,
             commands::create_db_backup,
             commands::list_db_backups,
@@ -1358,9 +1381,12 @@ pub fn run() {
             // Stream health check
             commands::stream_check_provider,
             // Keychain (API Key 安全存储)
-            commands::set_api_key_cmd,
-            commands::get_api_key_cmd,
-            commands::delete_api_key_cmd,
+            #[cfg(not(target_os = "linux"))]
+            commands::set_api_key,
+            #[cfg(not(target_os = "linux"))]
+            commands::get_api_key,
+            #[cfg(not(target_os = "linux"))]
+            commands::delete_api_key,
             commands::stream_check_all_providers,
             commands::get_stream_check_config,
             commands::save_stream_check_config,
@@ -1442,8 +1468,11 @@ pub fn run() {
             commands::copilot_get_models_for_account,
             commands::copilot_get_usage,
             // API Key 安全管理（系统 Keychain）
+            #[cfg(not(target_os = "linux"))]
             commands::set_api_key,
+            #[cfg(not(target_os = "linux"))]
             commands::get_api_key,
+            #[cfg(not(target_os = "linux"))]
             commands::delete_api_key,
             commands::copilot_get_usage_for_account,
             // OMO commands

@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { providersApi, type AppId, type ProviderSwitchEvent } from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useTauriEvent } from "@/hooks/useTauriEvent";
-import { useSystemNotification } from "@/hooks/useSystemNotification";
+import { useSystemNotifications } from "@/hooks/useSystemNotifications";
 import type { EnvConflict } from "@/types/env";
 import type { NotificationPreferences } from "@/types/notification";
 import { DEFAULT_NOTIFICATION_PREFERENCES } from "@/types/notification";
@@ -32,7 +32,7 @@ export function useAppEvents({
 }: UseAppEventsParams) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const { notify } = useSystemNotification();
+  const { notify } = useSystemNotifications();
 
   // Load notification preferences
   const getPreferences = (): NotificationPreferences => {

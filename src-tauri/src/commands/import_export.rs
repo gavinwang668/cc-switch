@@ -3,6 +3,7 @@
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use tauri::State;
+#[cfg(not(target_os = "linux"))]
 use tauri_plugin_dialog::DialogExt;
 
 use crate::commands::sync_support::{
@@ -95,6 +96,7 @@ pub async fn write_text_file(
 }
 
 /// 保存文件对话框
+#[cfg(not(target_os = "linux"))]
 #[tauri::command]
 pub async fn save_file_dialog<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
@@ -111,6 +113,7 @@ pub async fn save_file_dialog<R: tauri::Runtime>(
 }
 
 /// 打开文件对话框
+#[cfg(not(target_os = "linux"))]
 #[tauri::command]
 pub async fn open_file_dialog<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
@@ -125,6 +128,7 @@ pub async fn open_file_dialog<R: tauri::Runtime>(
 }
 
 /// 打开 ZIP 文件选择对话框
+#[cfg(not(target_os = "linux"))]
 #[tauri::command]
 pub async fn open_zip_file_dialog<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,

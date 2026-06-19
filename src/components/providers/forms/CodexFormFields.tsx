@@ -142,6 +142,12 @@ export function CodexFormFields({
   const [fetchedModels, setFetchedModels] = useState<FetchedModel[]>([]);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const needsLocalRouting = apiFormat === "openai_chat";
+
+  // 切换本地路由映射开关：开启 → openai_chat，关闭 → openai_responses
+  const handleLocalRoutingChange = (enabled: boolean) => {
+    onApiFormatChange(enabled ? "openai_chat" : "openai_responses");
+  };
+
   const canEditCatalog = Boolean(onCatalogModelsChange);
   const canEditReasoning = Boolean(onCodexChatReasoningChange);
   const supportsThinking =

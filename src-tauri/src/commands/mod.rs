@@ -12,6 +12,7 @@ mod failover;
 mod global_proxy;
 mod hermes;
 mod import_export;
+#[cfg(not(target_os = "linux"))]
 mod keychain;
 mod mcp;
 mod misc;
@@ -47,6 +48,7 @@ pub use failover::*;
 pub use global_proxy::*;
 pub use hermes::*;
 pub use import_export::*;
+#[cfg(not(target_os = "linux"))]
 pub use keychain::*;
 pub use mcp::*;
 pub use misc::*;

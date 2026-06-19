@@ -45,6 +45,30 @@ impl Database {
         ))
     }
 
+    /// 获取所有设置（返回键值对）
+    pub fn get_all_settings(&self) -> Result<std::collections::HashMap<String, String>, AppError> {
+        let conn = lock_conn!(self.conn);
+        let mut stmt = conn
+            .prepare("SELECT key, value FROM settings ORDER BY key")
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                ))
+            })
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        let mut map = std::collections::HashMap::new();
+        for row in rows {
+            let (key, value) = row.map_err(|e| AppError::Database(e.to_string()))?;
+            map.insert(key, value);
+        }
+        Ok(map)
+    }
+
     /// 设置值
     pub fn set_setting(&self, key: &str, value: &str) -> Result<(), AppError> {
         let conn = lock_conn!(self.conn);

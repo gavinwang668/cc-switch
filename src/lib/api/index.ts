@@ -16,7 +16,6 @@ export { keychainApi } from "./keychain";
 export * as configApi from "./config";
 export * as authApi from "./auth";
 export * as copilotApi from "./copilot";
-export * as keychainApi from "./keychain";
 export type { ProviderSwitchEvent } from "./providers";
 export type { Prompt } from "./prompts";
 export type {

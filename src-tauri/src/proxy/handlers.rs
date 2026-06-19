@@ -64,6 +64,27 @@ pub async fn get_status(State(state): State<ProxyState>) -> Result<Json<ProxySta
     Ok(Json(status))
 }
 
+/// POST /stop — 远程停止代理服务器
+///
+/// 由 CLI `stop` 子命令调用。从共享的 shutdown 通道取出 sender 并发送信号，
+/// 触发 `ProxyServer::start` 中的 accept loop 退出。
+pub async fn stop_server(State(state): State<ProxyState>) -> (StatusCode, Json<Value>) {
+    let tx = state.shutdown_tx.write().await.take();
+    if let Some(tx) = tx {
+        let _ = tx.send(());
+        log::info!("[ProxyServer] 收到远程停止请求，正在关闭...");
+        (
+            StatusCode::OK,
+            Json(json!({ "status": "stopping", "message": "shutdown signal sent" })),
+        )
+    } else {
+        (
+            StatusCode::CONFLICT,
+            Json(json!({ "status": "not_running", "message": "no shutdown sender available" })),
+        )
+    }
+}
+
 /// GET /v1/models — Codex model list (reachability check)
 ///
 /// Codex CLI probes this endpoint at startup and deserializes the response as a
