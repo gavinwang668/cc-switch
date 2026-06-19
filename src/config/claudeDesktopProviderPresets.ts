@@ -42,6 +42,7 @@ export interface ClaudeDesktopProviderPreset {
   apiKeyUrl?: string;
   category?: ProviderCategory;
   isPartner?: boolean;
+  primePartner?: boolean; // 置顶合作伙伴（顶级）：徽章显示为心形
   partnerPromotionKey?: string;
 
   baseUrl: string;
@@ -409,6 +410,7 @@ export const claudeDesktopProviderPresets: ClaudeDesktopProviderPreset[] = [
   },
   {
     name: "Kimi",
+    primePartner: true,
     websiteUrl: "https://platform.moonshot.cn/console?aff=cc-switch",
     category: "cn_official",
     baseUrl: "https://api.moonshot.cn/anthropic",
@@ -424,6 +426,7 @@ export const claudeDesktopProviderPresets: ClaudeDesktopProviderPreset[] = [
   },
   {
     name: "Kimi For Coding",
+    primePartner: true,
     websiteUrl: "https://www.kimi.com/code/docs/?aff=cc-switch",
     category: "cn_official",
     baseUrl: "https://api.kimi.com/coding/",
