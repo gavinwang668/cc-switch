@@ -41,11 +41,10 @@ pub use app_config::{AppType, InstalledSkill, McpApps, McpServer, MultiAppConfig
 pub use codex_config::{get_codex_auth_path, get_codex_config_path, write_codex_live_atomic};
 pub use commands::open_provider_terminal;
 pub use commands::*;
-pub use config::{get_app_config_dir, get_claude_mcp_path, get_claude_settings_path, read_json_file};
+pub use config::{
+    get_app_config_dir, get_claude_mcp_path, get_claude_settings_path, read_json_file,
+};
 pub use database::Database;
-pub use proxy::{ProxyConfig, ProxyStatus, server::ProxyServer};
-pub use proxy::circuit_breaker::CircuitBreakerConfig;
-pub use proxy::http_client;
 pub use deeplink::{import_provider_from_deeplink, parse_deeplink_url, DeepLinkImportRequest};
 pub use error::AppError;
 pub use mcp::{
@@ -55,6 +54,9 @@ pub use mcp::{
     sync_single_server_to_codex, sync_single_server_to_gemini,
 };
 pub use provider::{Provider, ProviderMeta};
+pub use proxy::circuit_breaker::CircuitBreakerConfig;
+pub use proxy::http_client;
+pub use proxy::{server::ProxyServer, ProxyConfig, ProxyStatus};
 pub use services::{
     skill::{migrate_skills_to_ssot, ImportSkillSelection},
     ConfigService, EndpointLatency, McpService, PromptService, ProviderService, ProxyService,
@@ -295,10 +297,10 @@ pub fn run() {
         })
         .plugin(tauri_plugin_process::init());
 
-        #[cfg(not(target_os = "linux"))]
-        let builder = builder.plugin(tauri_plugin_dialog::init());
+    #[cfg(not(target_os = "linux"))]
+    let builder = builder.plugin(tauri_plugin_dialog::init());
 
-        let builder = builder
+    let builder = builder
             .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(
@@ -1132,14 +1134,22 @@ pub fn run() {
             }
 
             // 静默启动：根据设置决定是否显示主窗口
-            let settings = crate::settings::get_settings();
+            //
+            // 防御策略：先无条件 show 窗口（确保即使设置读取异常也不会白屏），
+            // 仅在确认 silent_startup=true 时才隐藏。窗口配置 visible=false，
+            // 但这里 show() 会将其变为可见。
             if let Some(window) = app.get_webview_window("main") {
-                // 在窗口首次显示前同步装饰状态，避免前端加载后再切换导致标题栏闪烁
-                // 仅 Linux 生效：解决 Wayland 下系统窗口按钮不可用的问题
-                #[cfg(target_os = "linux")]
-                let _ = window.set_decorations(!settings.use_app_window_controls);
-                if settings.silent_startup {
-                    // 静默启动模式：保持窗口隐藏
+                // 默认先显示窗口 —— 这是最安全的兜底行为
+                let _ = window.show();
+
+                // 读取设置（带兜底：读取失败视为非静默启动）
+                let silent_startup = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    crate::settings::get_settings().silent_startup
+                }))
+                .unwrap_or(false);
+
+                if silent_startup {
+                    // 确认静默启动后才隐藏窗口
                     let _ = window.hide();
                     #[cfg(target_os = "windows")]
                     let _ = window.set_skip_taskbar(true);
@@ -1147,8 +1157,13 @@ pub fn run() {
                     tray::apply_tray_policy(app.handle(), false);
                     log::info!("静默启动模式：主窗口已隐藏");
                 } else {
-                    // 正常启动模式：显示窗口
-                    let _ = window.show();
+                    // 在窗口首次显示前同步装饰状态，避免前端加载后再切换导致标题栏闪烁
+                    // 仅 Linux 生效：解决 Wayland 下系统窗口按钮不可用的问题
+                    #[cfg(target_os = "linux")]
+                    {
+                        let settings = crate::settings::get_settings();
+                        let _ = window.set_decorations(!settings.use_app_window_controls);
+                    }
                     log::info!("正常启动模式：主窗口已显示");
 
                     // Linux: 解决首次启动 UI 无响应问题（Tauri #10746 + wry #637）。

@@ -21,14 +21,35 @@ const localeLoaders: Record<
 };
 
 const loadedLanguages = new Set<Language>();
+const failedLanguages = new Set<Language>();
 
-async function loadLanguage(language: Language) {
-  if (loadedLanguages.has(language)) return;
+async function loadLanguage(language: Language): Promise<boolean> {
+  if (loadedLanguages.has(language)) return true;
+  // 已经失败过的语言不再重试，避免无限循环的 missingKey 触发
+  if (failedLanguages.has(language)) return false;
   const loader = localeLoaders[language];
-  if (!loader) return;
-  const module = await loader();
-  i18n.addResourceBundle(language, "translation", module.default, true, true);
-  loadedLanguages.add(language);
+  if (!loader) return false;
+
+  try {
+    const module = await loader();
+    i18n.addResourceBundle(language, "translation", module.default, true, true);
+    loadedLanguages.add(language);
+    return true;
+  } catch (error) {
+    failedLanguages.add(language);
+    console.error(`[i18n] 加载语言包失败 (${language}):`, error);
+    // 如果默认语言加载失败，尝试回退到英文
+    if (language === DEFAULT_LANGUAGE && language !== "en") {
+      console.warn("[i18n] 默认语言加载失败，回退到英文");
+      const enLoaded = await loadLanguage("en");
+      if (enLoaded) {
+        // 设置标志避免 languageChanged 处理器重复加载
+        languageChangedFromFallback = true;
+        i18n.changeLanguage("en");
+      }
+    }
+    return false;
+  }
 }
 
 const getInitialLanguage = (): Language => {
@@ -85,7 +106,14 @@ i18n.use(initReactI18next).init({
 
 // 资源加载逻辑通过 languageChanged / missingKey 事件接管
 
+let languageChangedFromFallback = false;
+
 i18n.on("languageChanged", (language) => {
+  // 如果是从 fallback 触发的切换，跳过避免循环
+  if (languageChangedFromFallback) {
+    languageChangedFromFallback = false;
+    return;
+  }
   if ((SUPPORTED_LANGUAGES as string[]).includes(language)) {
     void loadLanguage(language as Language);
   }
@@ -94,10 +122,14 @@ i18n.on("languageChanged", (language) => {
 void loadLanguage(getInitialLanguage());
 
 // 兜底：当翻译缺失时尝试加载目标语言资源
+// 只对尚未失败的语言尝试加载，避免无限触发 missingKey
 i18n.on("missingKey", (lngs) => {
   const list = Array.isArray(lngs) ? lngs : [lngs];
   for (const lng of list) {
-    if ((SUPPORTED_LANGUAGES as string[]).includes(lng)) {
+    if (
+      (SUPPORTED_LANGUAGES as string[]).includes(lng) &&
+      !failedLanguages.has(lng as Language)
+    ) {
       void loadLanguage(lng as Language);
     }
   }

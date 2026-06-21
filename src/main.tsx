@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { UpdateProvider } from "./contexts/UpdateContext";
@@ -9,6 +9,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/components/theme-provider";
 import { queryClient } from "@/lib/query";
 import { Toaster } from "@/components/ui/sonner";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { RouterProvider } from "@/lib/router";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { message } from "@tauri-apps/plugin-dialog";
@@ -60,44 +62,86 @@ async function handleConfigLoadError(
   await exit(1);
 }
 
-// 监听后端的配置加载错误事件：仅提醒用户并强制退出，不修改任何配置文件
-try {
-  void listen("configLoadError", async (evt) => {
-    await handleConfigLoadError(evt.payload as ConfigLoadErrorPayload | null);
-  });
-} catch (e) {
-  // 忽略事件订阅异常（例如在非 Tauri 环境下）
-  console.error("订阅 configLoadError 事件失败", e);
+/**
+ * 启动期初始化守卫组件
+ *
+ * 在 React 树挂载后才异步查询后端 init error，避免 IPC 调用阻塞首屏渲染。
+ * 如果后端报告配置损坏，弹出系统对话框后退出应用。
+ */
+function BootstrapGuard({ children }: { children: React.ReactNode }) {
+  const checkedRef = useRef(false);
+
+  useEffect(() => {
+    if (checkedRef.current) return;
+    checkedRef.current = true;
+
+    let cancelled = false;
+
+    const checkInitError = async () => {
+      try {
+        const initError = (await invoke(
+          "get_init_error",
+        )) as ConfigLoadErrorPayload | null;
+        if (cancelled) return;
+        if (initError && (initError.path || initError.error)) {
+          await handleConfigLoadError(initError);
+        }
+      } catch (e) {
+        // 忽略拉取错误，继续正常渲染
+        if (!cancelled) {
+          console.error("拉取初始化错误失败", e);
+        }
+      }
+    };
+
+    void checkInitError();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 监听后端的配置加载错误事件（运行时侧推送）
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+
+    try {
+      const promise = listen("configLoadError", async (evt) => {
+        await handleConfigLoadError(
+          evt.payload as ConfigLoadErrorPayload | null,
+        );
+      });
+      promise.then((fn) => {
+        unsubscribe = fn;
+      });
+    } catch (e) {
+      console.error("订阅 configLoadError 事件失败", e);
+    }
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  return <>{children}</>;
 }
 
-async function bootstrap() {
-  // 启动早期主动查询后端初始化错误，避免事件竞态
-  try {
-    const initError = (await invoke(
-      "get_init_error",
-    )) as ConfigLoadErrorPayload | null;
-    if (initError && (initError.path || initError.error)) {
-      await handleConfigLoadError(initError);
-      // 注意：不会执行到这里，因为 exit(1) 会终止进程
-      return;
-    }
-  } catch (e) {
-    // 忽略拉取错误，继续渲染
-    console.error("拉取初始化错误失败", e);
-  }
-
-  ReactDOM.createRoot(document.getElementById("root")!).render(
-    <React.StrictMode>
+// ─── 立即挂载 React 树（不等待任何 IPC） ───
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider defaultTheme="system" storageKey="cc-switch-theme">
           <UpdateProvider>
-            <App />
-            <Toaster />
+            <RouterProvider>
+              <BootstrapGuard>
+                <App />
+              </BootstrapGuard>
+              <Toaster />
+            </RouterProvider>
           </UpdateProvider>
         </ThemeProvider>
       </QueryClientProvider>
-    </React.StrictMode>,
-  );
-}
-
-void bootstrap();
+    </ErrorBoundary>
+  </React.StrictMode>,
+);
