@@ -330,9 +330,10 @@ pub fn handle_provider_tray_event(app: &tauri::AppHandle, event_id: &str) -> boo
                 log::info!("切换到{} Auto模式", section.log_name);
                 let app_handle = app.clone();
                 let app_type = section.app_type.clone();
-                tauri::async_runtime::spawn_blocking(move || {
-                    if let Err(e) = handle_auto_click(&app_handle, &app_type) {
-                        log::error!("切换{}Auto模式失败: {e}", section.log_name);
+                let log_name = section.log_name.to_string();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = handle_auto_click(&app_handle, &app_type).await {
+                        log::error!("切换{}Auto模式失败: {e}", log_name);
                     }
                 });
                 return true;
@@ -343,9 +344,10 @@ pub fn handle_provider_tray_event(app: &tauri::AppHandle, event_id: &str) -> boo
             let app_handle = app.clone();
             let provider_id = suffix.to_string();
             let app_type = section.app_type.clone();
-            tauri::async_runtime::spawn_blocking(move || {
-                if let Err(e) = handle_provider_click(&app_handle, &app_type, &provider_id) {
-                    log::error!("切换{}供应商失败: {e}", section.log_name);
+            let log_name = section.log_name.to_string();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = handle_provider_click(&app_handle, &app_type, &provider_id).await {
+                    log::error!("切换{}供应商失败: {e}", log_name);
                 }
             });
             return true;
@@ -355,7 +357,7 @@ pub fn handle_provider_tray_event(app: &tauri::AppHandle, event_id: &str) -> boo
 }
 
 /// 处理 Auto 点击：启用 proxy 和 auto_failover
-fn handle_auto_click(app: &tauri::AppHandle, app_type: &AppType) -> Result<(), AppError> {
+async fn handle_auto_click(app: &tauri::AppHandle, app_type: &AppType) -> Result<(), AppError> {
     if let Some(app_state) = app.try_state::<AppState>() {
         let app_type_str = app_type.as_str();
 
@@ -385,10 +387,10 @@ fn handle_auto_click(app: &tauri::AppHandle, app_type: &AppType) -> Result<(), A
         let proxy_service = &app_state.proxy_service;
 
         // 1) 确保代理服务运行（会自动设置 proxy_enabled = true）
-        let is_running = futures::executor::block_on(proxy_service.is_running());
+        let is_running = proxy_service.is_running().await;
         if !is_running {
             log::info!("[Tray] Auto 模式：启动代理服务");
-            if let Err(e) = futures::executor::block_on(proxy_service.start()) {
+            if let Err(e) = proxy_service.start().await {
                 log::error!("[Tray] 启动代理服务失败: {e}");
                 return Err(AppError::Message(format!("启动代理服务失败: {e}")));
             }
@@ -396,9 +398,7 @@ fn handle_auto_click(app: &tauri::AppHandle, app_type: &AppType) -> Result<(), A
 
         // 2) 执行 Live 配置接管（确保该 app 被代理接管）
         log::info!("[Tray] Auto 模式：对 {app_type_str} 执行接管");
-        if let Err(e) =
-            futures::executor::block_on(proxy_service.set_takeover_for_app(app_type_str, true))
-        {
+        if let Err(e) = proxy_service.set_takeover_for_app(app_type_str, true).await {
             log::error!("[Tray] 执行接管失败: {e}");
             return Err(AppError::Message(format!("执行接管失败: {e}")));
         }
@@ -409,9 +409,7 @@ fn handle_auto_click(app: &tauri::AppHandle, app_type: &AppType) -> Result<(), A
             .set_proxy_flags_sync(app_type_str, true, true)?;
 
         // 3.1) 立即切到队列 P1（热切换：不写 Live，仅更新 DB/settings/备份）
-        if let Err(e) = futures::executor::block_on(
-            proxy_service.switch_proxy_target(app_type_str, &p1_provider_id),
-        ) {
+        if let Err(e) = proxy_service.switch_proxy_target(app_type_str, &p1_provider_id).await {
             log::error!("[Tray] Auto 模式切换到队列 P1 失败: {e}");
             return Err(AppError::Message(format!(
                 "Auto 模式切换到队列 P1 失败: {e}"
@@ -444,7 +442,7 @@ fn handle_auto_click(app: &tauri::AppHandle, app_type: &AppType) -> Result<(), A
 }
 
 /// 处理供应商点击：关闭 auto_failover + 切换供应商
-fn handle_provider_click(
+async fn handle_provider_click(
     app: &tauri::AppHandle,
     app_type: &AppType,
     provider_id: &str,
@@ -463,7 +461,7 @@ fn handle_provider_click(
         crate::services::ProviderService::switch(app_state.inner(), app_type.clone(), provider_id)?;
 
         // 更新托盘菜单
-        if let Ok(new_menu) = create_tray_menu(app, app_state.inner()) {
+        if let Ok(new_menu) = create_tray_menu(app, app_state.inner()).await {
             if let Some(tray) = app.tray_by_id(TRAY_ID) {
                 let _ = tray.set_menu(Some(new_menu));
             }
@@ -488,7 +486,7 @@ fn handle_provider_click(
 }
 
 /// 创建动态托盘菜单
-pub fn create_tray_menu(
+pub async fn create_tray_menu(
     app: &tauri::AppHandle,
     app_state: &AppState,
 ) -> Result<Menu<tauri::Wry>, AppError> {
@@ -520,7 +518,7 @@ pub fn create_tray_menu(
         .separator();
 
     // Pre-compute proxy running state (used to disable official providers in tray menu)
-    let is_proxy_running = futures::executor::block_on(app_state.proxy_service.is_running());
+    let is_proxy_running = app_state.proxy_service.is_running().await;
 
     // 每个应用类型折叠为子菜单，避免供应商过多时菜单过长
     for section in TRAY_SECTIONS.iter() {
@@ -557,7 +555,7 @@ pub fn create_tray_menu(
 
             // Check if this app is under proxy takeover (for disabling official providers)
             let is_app_taken_over = is_proxy_running
-                && (futures::executor::block_on(app_state.db.get_live_backup(app_type_str))
+                && (app_state.db.get_live_backup(app_type_str).await
                     .ok()
                     .flatten()
                     .is_some()
@@ -669,7 +667,7 @@ pub fn refresh_tray_menu(app: &tauri::AppHandle) {
     use crate::store::AppState;
 
     if let Some(state) = app.try_state::<AppState>() {
-        if let Ok(new_menu) = create_tray_menu(app, state.inner()) {
+        if let Ok(new_menu) = tauri::async_runtime::block_on(create_tray_menu(app, state.inner())) {
             if let Some(tray) = app.tray_by_id(TRAY_ID) {
                 if let Err(e) = tray.set_menu(Some(new_menu)) {
                     log::error!("刷新托盘菜单失败: {e}");

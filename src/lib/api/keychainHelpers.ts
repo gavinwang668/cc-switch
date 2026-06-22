@@ -6,14 +6,27 @@ import type { Provider } from "@/types";
 import type { AppId } from "./types";
 import { keychainApi } from "./keychain";
 
-/** 哪些 env 键名包含这些子串视为敏感信息（API Key / Token 等） */
-const SENSITIVE_ENV_PATTERNS = [
+/** 敏感键名后缀模式（键名以这些后缀结尾视为敏感） */
+const SENSITIVE_KEY_SUFFIXES = [
+  "_API_KEY",
+  "_SECRET",
+  "_TOKEN",
+  "_PASSWORD",
+  "_AUTH",
+  "_CREDENTIAL",
+  "_PRIVATE_KEY",
+  "_ACCESS_KEY",
+  "_ACCESS_SECRET",
+] as const;
+
+/** 敏感键名前缀模式（键名以前缀开头视为敏感） */
+const SENSITIVE_KEY_PREFIXES = [
+  "ANTHROPIC_API",
+  "OPENAI_API",
+  "GEMINI_API",
   "API_KEY",
-  "AUTH_TOKEN",
-  "SECRET",
-  "TOKEN",
-  "PASSWORD",
-  "KEY",
+  "SECRET_KEY",
+  "PRIVATE_KEY",
 ] as const;
 
 /** 排除的非敏感键名（即便匹配上面的 pattern 也不应存入 Keychain） */
@@ -25,6 +38,10 @@ const NON_SENSITIVE_ENV_KEYS: ReadonlySet<string> = new Set([
   "GOOGLE_GEMINI_BASE_URL",
   "MODEL",
   "GEMINI_MODEL",
+  "API_VERSION",
+  "API_ENDPOINT",
+  "API_URL",
+  "ENDPOINT",
 ]);
 
 /** DB 中占位符，表示该值实际存储在系统 Keychain 中 */
@@ -32,11 +49,29 @@ const KEYCHAIN_PLACEHOLDER = "__KEYCHAIN__";
 
 /**
  * 判断一个 env 键名是否包含 API Key 等敏感信息
+ * 使用严格的匹配规则避免误判
  */
 function isSensitiveEnvKey(key: string): boolean {
-  if (NON_SENSITIVE_ENV_KEYS.has(key.toUpperCase())) return false;
   const upper = key.toUpperCase();
-  return SENSITIVE_ENV_PATTERNS.some((p) => upper.includes(p));
+
+  // 精确排除列表（不区分大小写）
+  if (NON_SENSITIVE_ENV_KEYS.has(upper)) return false;
+
+  // 检查敏感前缀
+  for (const prefix of SENSITIVE_KEY_PREFIXES) {
+    if (upper.startsWith(prefix)) return true;
+  }
+
+  // 检查敏感后缀
+  for (const suffix of SENSITIVE_KEY_SUFFIXES) {
+    if (upper.endsWith(suffix)) return true;
+  }
+
+  // 特殊关键词检查（需要完整匹配单词）
+  const SENSITIVE_KEYWORDS_REGEX = /\b(APIKEY|AUTHTOKEN|ACCESSTOKEN|REFRESHTOKEN|CLIENTSECRET|BEARERTOKEN)\b/;
+  if (SENSITIVE_KEYWORDS_REGEX.test(upper)) return true;
+
+  return false;
 }
 
 /**

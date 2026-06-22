@@ -1,4 +1,5 @@
 use super::env_checker::EnvConflict;
+use atomic_write::{atomic_write, AtomicWrite};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -60,7 +61,9 @@ fn create_backup(conflicts: &[EnvConflict]) -> Result<BackupInfo, String> {
     let json = serde_json::to_string_pretty(&backup_info)
         .map_err(|e| format!("序列化备份数据失败: {e}"))?;
 
-    fs::write(&backup_file, json).map_err(|e| format!("写入备份文件失败: {e}"))?;
+    // Write backup file with atomic write and secure permission
+    atomic_write(&backup_file, json.as_bytes()).map_err(|e| format!("写入备份文件失败: {e}"))?;
+    set_secure_permission(&backup_file)?;
 
     Ok(backup_info)
 }
@@ -69,6 +72,19 @@ fn create_backup(conflicts: &[EnvConflict]) -> Result<BackupInfo, String> {
 fn get_backup_dir() -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or("无法获取用户主目录")?;
     Ok(home.join(".cc-switch").join("backups"))
+}
+
+/// Set file permission to 0o600 (owner read/write only)
+fn set_secure_permission(path: &PathBuf) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("设置文件权限失败: {e}"))?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
 }
 
 /// Delete a single environment variable
@@ -135,9 +151,11 @@ fn delete_single_env(conflict: &EnvConflict) -> Result<(), String> {
                 .map(|s| s.to_string())
                 .collect();
 
-            // Write back to file
-            fs::write(file_path, new_content.join("\n"))
+            // Write back to file with atomic write and secure permission
+            let file_path_buf = PathBuf::from(file_path);
+            atomic_write(&file_path_buf, new_content.join("\n").as_bytes())
                 .map_err(|e| format!("写入文件失败 {file_path}: {e}"))?;
+            set_secure_permission(&file_path_buf)?;
 
             Ok(())
         }
@@ -216,8 +234,11 @@ fn restore_single_env(conflict: &EnvConflict) -> Result<(), String> {
             let export_line = format!("\nexport {}={}", conflict.var_name, conflict.var_value);
             content.push_str(&export_line);
 
-            // Write back to file
-            fs::write(file_path, content).map_err(|e| format!("写入文件失败 {file_path}: {e}"))?;
+            // Write back to file with atomic write and secure permission
+            let file_path_buf = PathBuf::from(file_path);
+            atomic_write(&file_path_buf, content.as_bytes())
+                .map_err(|e| format!("写入文件失败 {file_path}: {e}"))?;
+            set_secure_permission(&file_path_buf)?;
 
             Ok(())
         }

@@ -200,8 +200,57 @@ pub fn write_text_file(path: &Path, data: &str) -> Result<(), AppError> {
     atomic_write(path, data.as_bytes())
 }
 
+/// 检查路径是否允许写入（白名单检查）
+/// 防止写入到敏感系统目录
+fn is_path_allowed(path: &Path) -> Result<(), AppError> {
+    let path_str = path.to_string_lossy().to_lowercase();
+
+    // 敏感目录黑名单
+    let sensitive_patterns = [
+        "/etc/", "/usr/", "/bin/", "/sbin/", "/lib/",
+        "/sys/", "/proc/", "/dev/",
+        "/.ssh/", "/.gnupg/",
+        "/root/.ssh/", "/root/.gnupg/",
+    ];
+
+    for pattern in &sensitive_patterns {
+        if path_str.contains(pattern) {
+            return Err(AppError::Config(format!(
+                "禁止写入敏感目录: {}",
+                path.display()
+            )));
+        }
+    }
+
+    // 敏感文件名黑名单
+    let sensitive_names = [
+        "passwd", "shadow", "group", "hosts", "resolv.conf",
+        "bashrc", "bash_profile", "zshrc", "profile",
+        "authorized_keys", "id_rsa", "id_dsa", "id_ecdsa",
+    ];
+
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+
+    for name in &sensitive_names {
+        if file_name == *name {
+            return Err(AppError::Config(format!(
+                "禁止写入敏感文件: {}",
+                path.display()
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 /// 原子写入：写入临时文件后 rename 替换，避免半写状态
 pub fn atomic_write(path: &Path, data: &[u8]) -> Result<(), AppError> {
+    // 白名单检查
+    is_path_allowed(path)?;
+
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
     }

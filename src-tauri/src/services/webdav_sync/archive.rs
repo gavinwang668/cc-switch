@@ -116,6 +116,16 @@ pub(crate) fn restore_skills_zip(raw: &[u8]) -> Result<(), AppError> {
             continue;
         };
         let out_path = extracted.join(safe_name);
+
+        // 路径穿越防护：确保解压路径在目标目录内
+        if !out_path.starts_with(&extracted) {
+            return Err(localized(
+                "webdav.sync.skills_zip_path_traversal",
+                format!("ZIP 条目路径穿越: {}", safe_name.display()),
+                format!("Path traversal detected in ZIP entry: {}", safe_name.display()),
+            ));
+        }
+
         if entry.is_dir() {
             fs::create_dir_all(&out_path).map_err(|e| AppError::io(&out_path, e))?;
             continue;

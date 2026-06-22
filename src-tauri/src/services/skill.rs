@@ -16,7 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::timeout;
 
 use crate::app_config::{AppType, InstalledSkill, SkillApps, UnmanagedSkill};
-use crate::config::get_app_config_dir;
+use crate::config::{atomic_write, get_app_config_dir};
 use crate::database::Database;
 use crate::error::format_skill_error;
 
@@ -2295,6 +2295,15 @@ impl SkillService {
 
             let outpath = dest.join(relative_path);
 
+            // 路径穿越防护：确保解压路径在目标目录内
+            if !outpath.starts_with(dest) {
+                return Err(anyhow::anyhow!(format_skill_error(
+                    "PATH_TRAVERSAL",
+                    &[("path", relative_path)],
+                    Some("checkZipContent"),
+                )));
+            }
+
             if file.is_symlink() {
                 // 读取 symlink 目标路径
                 let mut target = String::new();
@@ -2451,7 +2460,7 @@ impl SkillService {
             let metadata_path = backup_path.join("meta.json");
             let metadata_json = serde_json::to_string_pretty(&metadata)
                 .context("failed to serialize skill backup metadata")?;
-            fs::write(&metadata_path, metadata_json)
+            atomic_write(&metadata_path, metadata_json.as_bytes())
                 .with_context(|| format!("failed to write {}", metadata_path.display()))?;
             Ok(())
         };
@@ -2707,6 +2716,15 @@ impl SkillService {
             };
 
             let outpath = temp_path.join(&file_path);
+
+            // 路径穿越防护：确保解压路径在目标目录内
+            if !outpath.starts_with(&temp_path) {
+                return Err(anyhow::anyhow!(format_skill_error(
+                    "PATH_TRAVERSAL",
+                    &[("path", &file_path.to_string_lossy())],
+                    Some("checkZipContent"),
+                )));
+            }
 
             if file.is_symlink() {
                 let mut target = String::new();

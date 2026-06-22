@@ -1296,7 +1296,13 @@ pub async fn get_subscription_quota(tool: &str) -> Result<SubscriptionQuota, Str
                     ))
                 }
                 CredentialStatus::Valid => {
-                    let token = token.expect("token must be Some when status is Valid");
+                    let Some(token) = token else {
+                        return Ok(SubscriptionQuota::error(
+                            "claude",
+                            CredentialStatus::ParseError,
+                            "token missing when status is Valid".to_string(),
+                        ));
+                    };
                     Ok(query_claude_quota(&token).await)
                 }
             }
@@ -1332,7 +1338,13 @@ pub async fn get_subscription_quota(tool: &str) -> Result<SubscriptionQuota, Str
                     ))
                 }
                 CredentialStatus::Valid => {
-                    let token = token.expect("token must be Some when status is Valid");
+                    let Some(token) = token else {
+                        return Ok(SubscriptionQuota::error(
+                            "codex",
+                            CredentialStatus::ParseError,
+                            "token missing when status is Valid".to_string(),
+                        ));
+                    };
                     Ok(query_codex_quota(
                         &token,
                         account_id.as_deref(),
@@ -1374,7 +1386,13 @@ pub async fn get_subscription_quota(tool: &str) -> Result<SubscriptionQuota, Str
                     ))
                 }
                 CredentialStatus::Valid => {
-                    let token = token.expect("token must be Some when status is Valid");
+                    let Some(token) = token else {
+                        return Ok(SubscriptionQuota::error(
+                            "gemini",
+                            CredentialStatus::ParseError,
+                            "token missing when status is Valid".to_string(),
+                        ));
+                    };
                     Ok(query_gemini_quota(&token).await)
                 }
             }
