@@ -37,6 +37,11 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
   const { t } = useTranslation();
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   // JSON linter 函数
   const jsonLinter = useMemo(
@@ -145,7 +150,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           const newValue = update.state.doc.toString();
-          onChange(newValue);
+          onChangeRef.current(newValue);
         }
       }),
     ];
@@ -208,7 +213,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
       view.destroy();
       viewRef.current = null;
     };
-  }, [darkMode, rows, height, language, jsonLinter]); // 依赖项中不包含 onChange 和 placeholder，避免不必要的重建
+  }, [darkMode, rows, height, language, jsonLinter, placeholderText]);
 
   // 当 value 从外部改变时更新编辑器内容
   useEffect(() => {
@@ -233,7 +238,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
 
     try {
       const formatted = formatJSON(currentValue);
-      onChange(formatted);
+      onChangeRef.current(formatted);
       toast.success(t("common.formatSuccess", { defaultValue: "格式化成功" }), {
         closeButton: true,
       });

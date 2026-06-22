@@ -28,6 +28,8 @@ export interface Provider {
   iconColor?: string; // 图标颜色（Hex 格式，如 "#00A67E"）
   // 是否加入故障转移队列
   inFailoverQueue?: boolean;
+  // Keychain 操作是否失败（静默失败时标记）
+  keychainError?: boolean;
 }
 
 export interface AppConfig {

@@ -77,7 +77,15 @@ export async function extractApiKeysFromProvider(
   const jsonValue = JSON.stringify(secrets);
 
   // 存入系统 Keychain
-  await keychainApi.setApiKey(provider.id, appId, jsonValue);
+  try {
+    await keychainApi.setApiKey(provider.id, appId, jsonValue);
+  } catch {
+    // Keychain 写入失败时静默处理，但在 provider 上设置标记
+    console.warn(`[Keychain] Failed to store API keys for provider ${provider.id}`);
+    const clonedProvider = structuredClone(provider);
+    clonedProvider.keychainError = true;
+    return clonedProvider;
+  }
 
   // 在原对象中用占位符替换
   const clonedProvider = structuredClone(provider);
@@ -112,7 +120,12 @@ export async function restoreApiKeysToProvider(
 
   try {
     const jsonValue = await keychainApi.getApiKey(provider.id, appId);
-    if (!jsonValue) return provider;
+    if (!jsonValue) {
+      // Keychain 中没有数据，可能是首次使用或之前存储失败
+      const clonedProvider = structuredClone(provider);
+      clonedProvider.keychainError = true;
+      return clonedProvider;
+    }
 
     const secrets: Record<string, string> = JSON.parse(jsonValue);
 
@@ -128,8 +141,11 @@ export async function restoreApiKeysToProvider(
 
     return clonedProvider;
   } catch {
-    // Keychain 读取失败时静默返回原 provider（占位符无法恢复）
-    return provider;
+    // Keychain 读取失败时静默返回原 provider（占位符无法恢复），并设置标记
+    console.warn(`[Keychain] Failed to restore API keys for provider ${provider.id}`);
+    const clonedProvider = structuredClone(provider);
+    clonedProvider.keychainError = true;
+    return clonedProvider;
   }
 }
 

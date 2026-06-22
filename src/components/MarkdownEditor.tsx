@@ -28,6 +28,11 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -68,8 +73,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       extensions.push(
         placeholderExt(placeholderText),
         EditorView.updateListener.of((update) => {
-          if (update.docChanged && onChange) {
-            onChange(update.state.doc.toString());
+          if (update.docChanged && onChangeRef.current) {
+            onChangeRef.current(update.state.doc.toString());
           }
         }),
       );
