@@ -193,7 +193,7 @@ async fn update_tray_menu(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<bool, String> {
-    match tray::create_tray_menu(&app, state.inner()) {
+    match tray::create_tray_menu(&app, state.inner()).await {
         Ok(new_menu) => {
             if let Some(tray) = app.tray_by_id(tray::TRAY_ID) {
                 tray.set_menu(Some(new_menu))
@@ -876,7 +876,7 @@ pub fn run() {
             log::info!("✓ Deep-link URL handler registered");
 
             // 创建动态托盘菜单
-            let menu = tray::create_tray_menu(app.handle(), &app_state)?;
+            let menu = tauri::async_runtime::block_on(tray::create_tray_menu(app.handle(), &app_state))?;
 
             // 构建托盘
             let mut tray_builder = TrayIconBuilder::with_id(tray::TRAY_ID)

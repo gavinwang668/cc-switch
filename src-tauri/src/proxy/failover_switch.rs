@@ -10,7 +10,59 @@ use crate::error::AppError;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
-use tokio::sync::RwLock;
+use tokio::sync::Mutex;
+
+/// RAII guard for pending switch cleanup.
+///
+/// 确保在作用域结束时（无论是正常返回还是 panic）自动清理 pending 标记。
+struct PendingSwitchGuard {
+    pending_switches: Arc<Mutex<HashSet<String>>>,
+    switch_key: String,
+    done: bool,
+}
+
+impl PendingSwitchGuard {
+    /// 尝试创建 guard，如果相同的切换已在进行中则返回错误。
+    async fn new(
+        pending_switches: &Arc<Mutex<HashSet<String>>>,
+        switch_key: String,
+    ) -> Result<Self, AppError> {
+        let mut pending = pending_switches.lock().await;
+        if pending.contains(&switch_key) {
+            return Err(AppError::Message(format!(
+                "切换已在进行中: {}",
+                switch_key
+            )));
+        }
+        pending.insert(switch_key.clone());
+        Ok(Self {
+            pending_switches: pending_switches.clone(),
+            switch_key,
+            done: false,
+        })
+    }
+
+    /// 标记切换已完成，后续 drop 时不再清理。
+    fn mark_done(&mut self) {
+        self.done = true;
+    }
+}
+
+impl Drop for PendingSwitchGuard {
+    fn drop(&mut self) {
+        if !self.done {
+            let pending_switches = self.pending_switches.clone();
+            let switch_key = self.switch_key.clone();
+            // 使用 tokio runtime 执行清理
+            if let Ok(rt) = tokio::runtime::Handle::try_current() {
+                rt.spawn(async move {
+                    let mut pending = pending_switches.lock().await;
+                    pending.remove(&switch_key);
+                });
+            }
+        }
+    }
+}
 
 /// 故障转移切换管理器
 ///
@@ -18,14 +70,14 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 pub struct FailoverSwitchManager {
     /// 正在处理中的切换（key = "app_type:provider_id"）
-    pending_switches: Arc<RwLock<HashSet<String>>>,
+    pending_switches: Arc<Mutex<HashSet<String>>>,
     db: Arc<Database>,
 }
 
 impl FailoverSwitchManager {
     pub fn new(db: Arc<Database>) -> Self {
         Self {
-            pending_switches: Arc::new(RwLock::new(HashSet::new())),
+            pending_switches: Arc::new(Mutex::new(HashSet::new())),
             db,
         }
     }
@@ -47,26 +99,22 @@ impl FailoverSwitchManager {
     ) -> Result<bool, AppError> {
         let switch_key = format!("{app_type}:{provider_id}");
 
-        // 去重检查：如果相同切换已在进行中，跳过
-        {
-            let mut pending = self.pending_switches.write().await;
-            if pending.contains(&switch_key) {
+        // 使用 RAII guard 确保 panic 时也能正确清理
+        let mut guard = match PendingSwitchGuard::new(&self.pending_switches, switch_key).await {
+            Ok(g) => g,
+            Err(_) => {
                 log::debug!("[Failover] 切换已在进行中，跳过: {app_type} -> {provider_id}");
                 return Ok(false);
             }
-            pending.insert(switch_key.clone());
-        }
+        };
 
-        // 执行切换（确保最后清理 pending 标记）
+        // 执行切换
         let result = self
             .do_switch(app_handle, app_type, provider_id, provider_name)
             .await;
 
-        // 清理 pending 标记
-        {
-            let mut pending = self.pending_switches.write().await;
-            pending.remove(&switch_key);
-        }
+        // 标记完成，guard.drop() 时不会再清理
+        guard.mark_done();
 
         result
     }
@@ -110,7 +158,7 @@ impl FailoverSwitchManager {
                     return Ok(false);
                 }
 
-                if let Ok(new_menu) = crate::tray::create_tray_menu(app, app_state.inner()) {
+                if let Ok(new_menu) = crate::tray::create_tray_menu(app, app_state.inner()).await {
                     if let Some(tray) = app.tray_by_id(crate::tray::TRAY_ID) {
                         if let Err(e) = tray.set_menu(Some(new_menu)) {
                             log::error!("[Failover] 更新托盘菜单失败: {e}");

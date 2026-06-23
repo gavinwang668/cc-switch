@@ -71,6 +71,7 @@ import { SkillsPage } from "@/components/skills/SkillsPage";
 import UnifiedSkillsPanel from "@/components/skills/UnifiedSkillsPanel";
 import { DeepLinkImportDialog } from "@/components/DeepLinkImportDialog";
 import { FirstRunNoticeDialog } from "@/components/FirstRunNoticeDialog";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AgentsPanel } from "@/components/agents/AgentsPanel";
 import { UniversalProviderPanel } from "@/components/universal";
 import { McpIcon } from "@/components/BrandIcons";
@@ -751,10 +752,11 @@ function App() {
   };
 
   return (
-    <div
-      className="flex flex-col h-screen overflow-hidden bg-background text-foreground selection:bg-primary/30 pb-4"
-      style={{ overflowX: "hidden", paddingTop: contentTopOffset }}
-    >
+    <ErrorBoundary>
+      <div
+        className="flex flex-col h-screen overflow-hidden bg-background text-foreground selection:bg-primary/30 pb-4"
+        style={{ overflowX: "hidden", paddingTop: contentTopOffset }}
+      >
       {(dragBarHeight > 0 || useAppWindowControls) && (
         <div
           className="fixed top-0 left-0 right-0 z-[70] flex items-center justify-end px-2"
@@ -1347,6 +1349,7 @@ function App() {
       <DeepLinkImportDialog />
       <FirstRunNoticeDialog />
     </div>
+    </ErrorBoundary>
   );
 }
 

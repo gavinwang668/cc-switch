@@ -31,10 +31,17 @@ export function decodeBase64Utf8(str: string): string {
       return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
     }
   } catch (e) {
-    console.error("Base64 decode error:", e, "Input:", str);
+    // 重要：不要将原始输入记录到日志——可能含 API Key/token/deep link 中的敏感配置。
+    // 仅记录输入长度（截断到 4KB）和错误本身，便于排错。
+    const safeLen = Math.min(str.length, 4096);
+    console.error(
+      "Base64 decode error:",
+      e instanceof Error ? e.message : String(e),
+      `input.length=${str.length}, head.length=${safeLen}`,
+    );
     // Last resort fallback using deprecated but sometimes working method
     try {
-      return decodeURIComponent(escape(atob(str.replace(/ /g, "+"))));
+      return decodeURIComponent(escape(str.replace(/ /g, "+")));
     } catch {
       // If all else fails, return original string
       return str;

@@ -949,10 +949,61 @@ fn parse_gemini_file_json(content: &str) -> GeminiCredentials {
 
 // ── Gemini Token 刷新 ──────────────────────────────────────
 
-/// Gemini OAuth Client 凭据（公开值，来自 Gemini CLI 源码 google-gemini/gemini-cli）
-const GEMINI_OAUTH_CLIENT_ID: &str =
-    "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com";
-const GEMINI_OAUTH_CLIENT_SECRET: &str = "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";
+/// Gemini OAuth Client ID（公开值，来自 Gemini CLI 源码 google-gemini/gemini-cli）
+///
+/// 为避免在源码中硬编码 client_secret（一旦 Google 吊销密钥将影响所有用户，
+/// 且 binary 编译后无法轮换），优先从环境变量/配置文件读取：
+///   1. `CC_SWITCH_GEMINI_OAUTH_CLIENT_ID` / `CC_SWITCH_GEMINI_OAUTH_CLIENT_SECRET`
+///   2. 配置文件 `~/.cc-switch/oauth.toml` 中的 `[gemini] client_id` / `client_secret`
+///   3. 回退到公开默认值（仅在用户未配置时使用，secret 仍为公开值）
+fn gemini_oauth_client_id() -> String {
+    if let Ok(v) = std::env::var("CC_SWITCH_GEMINI_OAUTH_CLIENT_ID") {
+        if !v.is_empty() {
+            return v;
+        }
+    }
+    if let Some(v) = read_gemini_oauth_from_config("client_id") {
+        return v;
+    }
+    "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com".to_string()
+}
+
+fn gemini_oauth_client_secret() -> String {
+    if let Ok(v) = std::env::var("CC_SWITCH_GEMINI_OAUTH_CLIENT_SECRET") {
+        if !v.is_empty() {
+            return v;
+        }
+    }
+    if let Some(v) = read_gemini_oauth_from_config("client_secret") {
+        return v;
+    }
+    // 公开默认值，源自 Gemini CLI 源码；为保留向后兼容性而保留。
+    // 强烈建议通过环境变量或配置文件覆盖。
+    "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".to_string()
+}
+
+/// 从 `~/.cc-switch/oauth.toml` 的 `[gemini]` 段读取字段。
+/// 读取失败或字段不存在时返回 None，绝不 panic。
+fn read_gemini_oauth_from_config(field: &str) -> Option<String> {
+    let path = oauth_config_path()?;
+    let content = std::fs::read_to_string(&path).ok()?;
+    let value: toml::Value = toml::from_str(&content).ok()?;
+    value
+        .get("gemini")
+        .and_then(|g| g.get(field))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+}
+
+fn oauth_config_path() -> Option<std::path::PathBuf> {
+    let dir = dirs::config_dir()?.join("cc-switch");
+    let p = dir.join("oauth.toml");
+    if p.exists() {
+        Some(p)
+    } else {
+        None
+    }
+}
 
 /// 使用 refresh_token 刷新 Gemini access token
 ///
@@ -964,8 +1015,8 @@ async fn refresh_gemini_token(refresh_token: &str) -> Option<String> {
     let resp = client
         .post("https://oauth2.googleapis.com/token")
         .form(&[
-            ("client_id", GEMINI_OAUTH_CLIENT_ID),
-            ("client_secret", GEMINI_OAUTH_CLIENT_SECRET),
+            ("client_id", gemini_oauth_client_id().as_str()),
+            ("client_secret", gemini_oauth_client_secret().as_str()),
             ("refresh_token", refresh_token),
             ("grant_type", "refresh_token"),
         ])
@@ -1245,7 +1296,13 @@ pub async fn get_subscription_quota(tool: &str) -> Result<SubscriptionQuota, Str
                     ))
                 }
                 CredentialStatus::Valid => {
-                    let token = token.expect("token must be Some when status is Valid");
+                    let Some(token) = token else {
+                        return Ok(SubscriptionQuota::error(
+                            "claude",
+                            CredentialStatus::ParseError,
+                            "token missing when status is Valid".to_string(),
+                        ));
+                    };
                     Ok(query_claude_quota(&token).await)
                 }
             }
@@ -1281,7 +1338,13 @@ pub async fn get_subscription_quota(tool: &str) -> Result<SubscriptionQuota, Str
                     ))
                 }
                 CredentialStatus::Valid => {
-                    let token = token.expect("token must be Some when status is Valid");
+                    let Some(token) = token else {
+                        return Ok(SubscriptionQuota::error(
+                            "codex",
+                            CredentialStatus::ParseError,
+                            "token missing when status is Valid".to_string(),
+                        ));
+                    };
                     Ok(query_codex_quota(
                         &token,
                         account_id.as_deref(),
@@ -1323,7 +1386,13 @@ pub async fn get_subscription_quota(tool: &str) -> Result<SubscriptionQuota, Str
                     ))
                 }
                 CredentialStatus::Valid => {
-                    let token = token.expect("token must be Some when status is Valid");
+                    let Some(token) = token else {
+                        return Ok(SubscriptionQuota::error(
+                            "gemini",
+                            CredentialStatus::ParseError,
+                            "token missing when status is Valid".to_string(),
+                        ));
+                    };
                     Ok(query_gemini_quota(&token).await)
                 }
             }

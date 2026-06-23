@@ -15,6 +15,27 @@ use tempfile::NamedTempFile;
 
 const CC_SWITCH_SQL_EXPORT_HEADER: &str = "-- CC Switch SQLite 导出";
 
+/// SQL keywords that are forbidden in imported SQL for security reasons.
+/// Prevents SQL injection via malicious SQL content in backup files.
+const FORBIDDEN_SQL_KEYWORDS: &[&str] = &[
+    "DROP",
+    "DELETE",
+    "UPDATE",
+    "INSERT OR",
+    "REPLACE INTO",
+    "ALTER",
+    "CREATE ",
+    "CREATETRIGGER",
+    "CREATE VIEW",
+    "CREATE INDEX",
+    "PRAGMA",
+    "ATTACH",
+    "DETACH",
+    "BEGIN TRANSACTION",
+    "COMMIT",
+    "ROLLBACK",
+];
+
 /// Tables whose data rows are skipped when exporting for WebDAV sync.
 const SYNC_SKIP_TABLES: &[&str] = &[
     "proxy_request_logs",
@@ -165,15 +186,50 @@ impl Database {
 
     fn validate_cc_switch_sql_export(sql: &str) -> Result<(), AppError> {
         let trimmed = sql.trim_start();
-        if trimmed.starts_with(CC_SWITCH_SQL_EXPORT_HEADER) {
-            return Ok(());
+        if !trimmed.starts_with(CC_SWITCH_SQL_EXPORT_HEADER) {
+            return Err(AppError::localized(
+                "backup.sql.invalid_format",
+                "仅支持导入由 CC Switch 导出的 SQL 备份文件。",
+                "Only SQL backups exported by CC Switch are supported.",
+            ));
         }
 
-        Err(AppError::localized(
-            "backup.sql.invalid_format",
-            "仅支持导入由 CC Switch 导出的 SQL 备份文件。",
-            "Only SQL backups exported by CC Switch are supported.",
-        ))
+        // Security: Validate SQL content doesn't contain dangerous keywords
+        // This prevents SQL injection via malicious SQL in backup files
+        let sql_upper = trimmed.to_uppercase();
+        for keyword in FORBIDDEN_SQL_KEYWORDS {
+            if sql_upper.contains(keyword) {
+                log::error!("SQL import blocked: contains forbidden keyword '{}'", keyword);
+                return Err(AppError::localized(
+                    "backup.sql.forbidden_keyword",
+                    &format!("SQL 文件包含禁止的关键字: {}", keyword),
+                    &format!("SQL file contains forbidden keyword: {}", keyword),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validates that a table name contains only safe characters.
+    /// Prevents SQL injection via malicious table names.
+    fn validate_table_name(table: &str) -> Result<(), AppError> {
+        if table.is_empty() || table.len() > 64 {
+            return Err(AppError::InvalidInput(format!(
+                "Invalid table name length: {}",
+                table.len()
+            )));
+        }
+        if !table
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '$')
+        {
+            return Err(AppError::InvalidInput(format!(
+                "Invalid table name: {}",
+                table
+            )));
+        }
+        Ok(())
     }
 
     fn restore_tables(
@@ -182,6 +238,9 @@ impl Database {
         tables: &[&str],
     ) -> Result<(), AppError> {
         for table in tables {
+            // Security: validate table name before using it in SQL
+            Self::validate_table_name(table)?;
+
             if !Self::table_exists(source_conn, table)? || !Self::table_exists(target_conn, table)?
             {
                 continue;

@@ -361,6 +361,9 @@ impl CircuitBreaker {
         *self.last_opened_at.write().await = Some(Instant::now());
         self.consecutive_failures.store(0, Ordering::SeqCst);
         self.consecutive_successes.store(0, Ordering::SeqCst);
+        // 重置计数器
+        self.total_requests.store(0, Ordering::SeqCst);
+        self.failed_requests.store(0, Ordering::SeqCst);
     }
 
     /// 转换到半开状态
