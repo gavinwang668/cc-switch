@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { DatabaseUpgrade } from "./components/DatabaseUpgrade";
 import { UpdateProvider } from "./contexts/UpdateContext";
 import "./index.css";
 // 导入国际化配置
@@ -32,6 +33,8 @@ try {
 interface ConfigLoadErrorPayload {
   path?: string;
   error?: string;
+  /** "db_version_too_new" 表示数据库版本过新，渲染应用内升级恢复界面 */
+  kind?: string;
 }
 
 /**
@@ -70,6 +73,8 @@ async function handleConfigLoadError(
  */
 function BootstrapGuard({ children }: { children: React.ReactNode }) {
   const checkedRef = useRef(false);
+  const [dbUpgradePayload, setDbUpgradePayload] =
+    useState<ConfigLoadErrorPayload | null>(null);
 
   useEffect(() => {
     if (checkedRef.current) return;
@@ -83,6 +88,10 @@ function BootstrapGuard({ children }: { children: React.ReactNode }) {
           "get_init_error",
         )) as ConfigLoadErrorPayload | null;
         if (cancelled) return;
+        if (initError?.kind === "db_version_too_new") {
+          setDbUpgradePayload(initError);
+          return;
+        }
         if (initError && (initError.path || initError.error)) {
           await handleConfigLoadError(initError);
         }
@@ -107,9 +116,12 @@ function BootstrapGuard({ children }: { children: React.ReactNode }) {
 
     try {
       const promise = listen("configLoadError", async (evt) => {
-        await handleConfigLoadError(
-          evt.payload as ConfigLoadErrorPayload | null,
-        );
+        const payload = evt.payload as ConfigLoadErrorPayload | null;
+        if (payload?.kind === "db_version_too_new") {
+          setDbUpgradePayload(payload);
+          return;
+        }
+        await handleConfigLoadError(payload);
       });
       promise.then((fn) => {
         unsubscribe = fn;
@@ -122,6 +134,10 @@ function BootstrapGuard({ children }: { children: React.ReactNode }) {
       if (unsubscribe) unsubscribe();
     };
   }, []);
+
+  if (dbUpgradePayload) {
+    return <DatabaseUpgrade payload={dbUpgradePayload} />;
+  }
 
   return <>{children}</>;
 }
