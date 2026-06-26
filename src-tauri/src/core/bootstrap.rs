@@ -85,7 +85,9 @@ pub fn bootstrap_headless() -> Result<AppState, String> {
                 .unwrap_or(false);
 
             if has_existing {
-                log::info!("Detected skills_ssot_migration_pending but skills table not empty; skipping.");
+                log::info!(
+                    "Detected skills_ssot_migration_pending but skills table not empty; skipping."
+                );
                 let _ = db.set_setting("skills_ssot_migration_pending", "false");
             } else {
                 match crate::services::skill::migrate_skills_to_ssot(&db) {
@@ -113,8 +115,7 @@ pub fn bootstrap_headless() -> Result<AppState, String> {
     // ============================================================
     for app_type in crate::app_config::AppType::all().filter(|t| !t.is_additive_mode()) {
         if !crate::services::provider::should_import_default_config_on_startup(
-            &app_state,
-            &app_type,
+            &app_state, &app_type,
         )
         .unwrap_or(false)
         {
@@ -122,7 +123,10 @@ pub fn bootstrap_headless() -> Result<AppState, String> {
         }
 
         match crate::services::provider::import_default_config(&app_state, app_type.clone()) {
-            Ok(true) => log::info!("✓ Imported live config for {} as default provider", app_type.as_str()),
+            Ok(true) => log::info!(
+                "✓ Imported live config for {} as default provider",
+                app_type.as_str()
+            ),
             Ok(false) => {}
             Err(e) => log::debug!("○ No live config to import for {}: {e}", app_type.as_str()),
         }
@@ -138,17 +142,23 @@ pub fn bootstrap_headless() -> Result<AppState, String> {
     // 7. OpenCode / OpenClaw / Hermes Live 导入
     // ============================================================
     match crate::services::provider::import_opencode_providers_from_live(&app_state) {
-        Ok(count) if count > 0 => log::info!("✓ Imported {count} OpenCode provider(s) from live config"),
+        Ok(count) if count > 0 => {
+            log::info!("✓ Imported {count} OpenCode provider(s) from live config")
+        }
         Ok(_) => {}
         Err(e) => log::warn!("✗ Failed to import OpenCode providers: {e}"),
     }
     match crate::services::provider::import_openclaw_providers_from_live(&app_state) {
-        Ok(count) if count > 0 => log::info!("✓ Imported {count} OpenClaw provider(s) from live config"),
+        Ok(count) if count > 0 => {
+            log::info!("✓ Imported {count} OpenClaw provider(s) from live config")
+        }
         Ok(_) => {}
         Err(e) => log::warn!("✗ Failed to import OpenClaw providers: {e}"),
     }
     match crate::services::provider::import_hermes_providers_from_live(&app_state) {
-        Ok(count) if count > 0 => log::info!("✓ Imported {count} Hermes provider(s) from live config"),
+        Ok(count) if count > 0 => {
+            log::info!("✓ Imported {count} Hermes provider(s) from live config")
+        }
         Ok(_) => {}
         Err(e) => log::warn!("✗ Failed to import Hermes providers: {e}"),
     }
@@ -159,14 +169,21 @@ pub fn bootstrap_headless() -> Result<AppState, String> {
     {
         let has_omo = db
             .get_all_providers("opencode")
-            .map(|providers| providers.values().any(|p| p.category.as_deref() == Some("omo")))
+            .map(|providers| {
+                providers
+                    .values()
+                    .any(|p| p.category.as_deref() == Some("omo"))
+            })
             .unwrap_or(false);
         if !has_omo {
             match crate::services::OmoService::import_from_local(
                 &app_state,
                 &crate::services::omo::STANDARD,
             ) {
-                Ok(provider) => log::info!("✓ Imported OMO config from local as provider '{}'", provider.name),
+                Ok(provider) => log::info!(
+                    "✓ Imported OMO config from local as provider '{}'",
+                    provider.name
+                ),
                 Err(crate::error::AppError::OmoConfigNotFound) => {}
                 Err(e) => log::warn!("✗ Failed to import OMO config from local: {e}"),
             }
@@ -186,7 +203,10 @@ pub fn bootstrap_headless() -> Result<AppState, String> {
                 &app_state,
                 &crate::services::omo::SLIM,
             ) {
-                Ok(provider) => log::info!("✓ Imported OMO Slim config from local as provider '{}'", provider.name),
+                Ok(provider) => log::info!(
+                    "✓ Imported OMO Slim config from local as provider '{}'",
+                    provider.name
+                ),
                 Err(crate::error::AppError::OmoConfigNotFound) => {}
                 Err(e) => log::warn!("✗ Failed to import OMO Slim config from local: {e}"),
             }
@@ -277,16 +297,30 @@ fn extract_common_config_snippets(state: &AppState) {
             &settings,
         ) {
             Ok(snippet) if !snippet.is_empty() && snippet != "{}" => {
-                match state.db.set_config_snippet(app_type.as_str(), Some(snippet)) {
+                match state
+                    .db
+                    .set_config_snippet(app_type.as_str(), Some(snippet))
+                {
                     Ok(()) => {
-                        let _ = state.db.set_config_snippet_cleared(app_type.as_str(), false);
-                        log::info!("✓ Auto-extracted common config snippet for {}", app_type.as_str());
+                        let _ = state
+                            .db
+                            .set_config_snippet_cleared(app_type.as_str(), false);
+                        log::info!(
+                            "✓ Auto-extracted common config snippet for {}",
+                            app_type.as_str()
+                        );
                     }
-                    Err(e) => log::warn!("✗ Failed to save config snippet for {}: {e}", app_type.as_str()),
+                    Err(e) => log::warn!(
+                        "✗ Failed to save config snippet for {}: {e}",
+                        app_type.as_str()
+                    ),
                 }
             }
             Ok(_) => {}
-            Err(e) => log::warn!("✗ Failed to extract config snippet for {}: {e}", app_type.as_str()),
+            Err(e) => log::warn!(
+                "✗ Failed to extract config snippet for {}: {e}",
+                app_type.as_str()
+            ),
         }
     }
 
@@ -306,7 +340,10 @@ fn extract_common_config_snippets(state: &AppState) {
                 state,
                 app_type.clone(),
             ) {
-                log::warn!("✗ Failed to migrate legacy common-config usage for {}: {e}", app_type.as_str());
+                log::warn!(
+                    "✗ Failed to migrate legacy common-config usage for {}: {e}",
+                    app_type.as_str()
+                );
             }
         }
         if let Err(e) = state.db.set_legacy_common_config_migrated(true) {
@@ -361,11 +398,19 @@ async fn restore_proxy_state_on_startup(state: &AppState) {
     log::info!("检测到上次代理状态需要恢复，应用列表: {apps_to_restore:?}");
 
     for app_type in apps_to_restore {
-        match state.proxy_service.set_takeover_for_app(app_type, true).await {
+        match state
+            .proxy_service
+            .set_takeover_for_app(app_type, true)
+            .await
+        {
             Ok(()) => log::info!("✓ 已恢复 {app_type} 的代理接管状态"),
             Err(e) => {
                 log::error!("✗ 恢复 {app_type} 的代理接管状态失败: {e}");
-                if let Err(clear_err) = state.proxy_service.set_takeover_for_app(app_type, false).await {
+                if let Err(clear_err) = state
+                    .proxy_service
+                    .set_takeover_for_app(app_type, false)
+                    .await
+                {
                     log::error!("清除 {app_type} 代理状态失败: {clear_err}");
                 }
             }
@@ -387,7 +432,10 @@ pub fn start_usage_sync_worker(db: Arc<Database>) {
         }
 
         // 首次同步
-        run_step("Usage cost startup backfill", db.backfill_missing_usage_costs());
+        run_step(
+            "Usage cost startup backfill",
+            db.backfill_missing_usage_costs(),
+        );
         run_step(
             "Session usage initial sync",
             crate::services::session_usage::sync_claude_session_logs(&db),
@@ -406,16 +454,35 @@ pub fn start_usage_sync_worker(db: Arc<Database>) {
         );
 
         // 定期同步
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(SESSION_SYNC_INTERVAL_SECS));
+        let mut interval =
+            tokio::time::interval(std::time::Duration::from_secs(SESSION_SYNC_INTERVAL_SECS));
         interval.tick().await; // skip immediate first tick
         loop {
             interval.tick().await;
-            run_step("Session usage periodic sync", crate::services::session_usage::sync_claude_session_logs(&db));
-            run_step("Codex usage periodic sync", crate::services::session_usage_codex::sync_codex_usage(&db));
-            run_step("Gemini usage periodic sync", crate::services::session_usage_gemini::sync_gemini_usage(&db));
-            run_step("OpenCode usage periodic sync", crate::services::session_usage_opencode::sync_opencode_usage(&db));
+            run_step(
+                "Session usage periodic sync",
+                crate::services::session_usage::sync_claude_session_logs(&db),
+            );
+            run_step(
+                "Codex usage periodic sync",
+                crate::services::session_usage_codex::sync_codex_usage(&db),
+            );
+            run_step(
+                "Gemini usage periodic sync",
+                crate::services::session_usage_gemini::sync_gemini_usage(&db),
+            );
+            run_step(
+                "OpenCode usage periodic sync",
+                crate::services::session_usage_opencode::sync_opencode_usage(&db),
+            );
         }
     });
+}
+
+/// 启动 WebDAV/S3 自动同步 worker（headless 模式，AppHandle 为 None）。
+pub fn start_sync_workers(db: Arc<Database>) {
+    crate::services::webdav_auto_sync::start_worker(db.clone(), None);
+    crate::services::s3_auto_sync::start_worker(db, None);
 }
 
 /// 启动周期性备份 timer（每 24 小时执行一次）。

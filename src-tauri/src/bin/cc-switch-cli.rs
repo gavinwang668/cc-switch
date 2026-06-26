@@ -74,6 +74,13 @@ enum Commands {
         /// Base URL
         #[arg(long)]
         base_url: Option<String>,
+        /// API 格式（仅 claude/codex/gemini/claude-desktop）
+        /// claude: anthropic / openai_chat / openai_responses
+        /// codex: openai_responses / openai_chat
+        /// gemini: gemini_native / openai_chat / openai_responses / anthropic
+        /// claude-desktop: anthropic / openai_chat / openai_responses / gemini_native / bedrock
+        #[arg(long)]
+        api_format: Option<String>,
     },
     /// 删除供应商
     RemoveProvider {
@@ -99,6 +106,16 @@ enum Commands {
         api_key: Option<String>,
         #[arg(long)]
         base_url: Option<String>,
+        /// API 格式（仅 claude/codex/gemini/claude-desktop）
+        /// claude: anthropic / openai_chat / openai_responses
+        /// codex: openai_responses / openai_chat
+        /// gemini: gemini_native / openai_chat / openai_responses / anthropic
+        /// claude-desktop: anthropic / openai_chat / openai_responses / gemini_native / bedrock
+        #[arg(long)]
+        api_format: Option<String>,
+        /// 清除 API 格式设置
+        #[arg(long)]
+        clear_api_format: bool,
     },
     /// 设置/查看代理接管状态
     Takeover {
@@ -166,9 +183,7 @@ enum Commands {
     /// 列出 MCP 服务器
     ListMcp,
     /// 列出 Prompts
-    ListPrompts {
-        app: Option<String>,
-    },
+    ListPrompts { app: Option<String> },
     /// 导出配置到文件
     ExportConfig {
         /// 输出文件路径
@@ -242,19 +257,51 @@ fn main() {
         Commands::Settings { key, value } => cmd_settings(key.as_deref(), value.as_deref()),
         Commands::Config { key, value } => cmd_config(key.as_deref(), value.as_deref()),
         Commands::ListProviders { app } => cmd_list_providers(app.as_deref()),
-        Commands::AddProvider { app, id, name, api_key, base_url } => {
-            cmd_add_provider(app, id, name, api_key.as_deref(), base_url.as_deref());
+        Commands::AddProvider {
+            app,
+            id,
+            name,
+            api_key,
+            base_url,
+            api_format,
+        } => {
+            cmd_add_provider(app, id, name, api_key.as_deref(), base_url.as_deref(), api_format.as_deref());
         }
         Commands::RemoveProvider { app, id } => cmd_remove_provider(app, id),
         Commands::SwitchProvider { app, id } => cmd_switch_provider(app, id),
-        Commands::UpdateProvider { app, id, name, api_key, base_url } => {
-            cmd_update_provider(app, id, name.as_deref(), api_key.as_deref(), base_url.as_deref());
+        Commands::UpdateProvider {
+            app,
+            id,
+            name,
+            api_key,
+            base_url,
+            api_format,
+            clear_api_format,
+        } => {
+            cmd_update_provider(
+                app,
+                id,
+                name.as_deref(),
+                api_key.as_deref(),
+                base_url.as_deref(),
+                api_format.as_deref(),
+                clear_api_format,
+            );
         }
         Commands::Takeover { app, enabled } => cmd_takeover(app, enabled.as_deref()),
         Commands::SwitchProxy { app, id } => cmd_switch_proxy(app, id),
-        Commands::FailoverQueue { action, app, id } => cmd_failover_queue(&action, app.as_deref(), id.as_deref()),
-        Commands::AutoFailover { app, enabled } => cmd_auto_failover(app.as_deref(), enabled.as_deref()),
-        Commands::CircuitBreaker { action, app, id, config } => {
+        Commands::FailoverQueue { action, app, id } => {
+            cmd_failover_queue(&action, app.as_deref(), id.as_deref())
+        }
+        Commands::AutoFailover { app, enabled } => {
+            cmd_auto_failover(app.as_deref(), enabled.as_deref())
+        }
+        Commands::CircuitBreaker {
+            action,
+            app,
+            id,
+            config,
+        } => {
             cmd_circuit_breaker(&action, app.as_deref(), id.as_deref(), config.as_deref());
         }
         Commands::Rectifier { action, config } => cmd_rectifier(&action, config.as_deref()),
@@ -290,11 +337,9 @@ fn init_logging(level: &str) {
         "trace" => "trace",
         _ => "info",
     };
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or(level)
-    )
-    .format_timestamp_secs()
-    .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(level))
+        .format_timestamp_secs()
+        .init();
 }
 
 /// 获取 PID 文件路径
@@ -373,8 +418,8 @@ fn cmd_start(internal_daemon: bool) {
         }
     };
 
-    let listen_address = std::env::var("CC_SWITCH_LISTEN")
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let listen_address =
+        std::env::var("CC_SWITCH_LISTEN").unwrap_or_else(|_| "127.0.0.1".to_string());
     let listen_port: u16 = std::env::var("CC_SWITCH_PORT")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -402,6 +447,9 @@ fn cmd_start(internal_daemon: bool) {
 
         // 启动周期性备份 timer
         bootstrap::start_periodic_backup_timer(app_state.db.clone());
+
+        // 启动 WebDAV/S3 自动同步 worker（headless 模式，无 AppHandle）
+        bootstrap::start_sync_workers(app_state.db.clone());
 
         println!("正在启动代理服务器...");
         match proxy_service.start().await {
@@ -461,7 +509,11 @@ fn cmd_daemon() {
     cmd.arg("start")
         .arg("--internal-daemon")
         .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::from(log_file.try_clone().unwrap_or_else(|_| log_file.try_clone().unwrap())))
+        .stdout(std::process::Stdio::from(
+            log_file
+                .try_clone()
+                .unwrap_or_else(|_| log_file.try_clone().unwrap()),
+        ))
         .stderr(std::process::Stdio::from(log_file));
 
     // Windows: 使用 DETACHED_PROCESS 标志使子进程脱离父进程控制台
@@ -514,7 +566,11 @@ async fn setup_signal_handlers(proxy_service: &cc_switch_lib::ProxyService, is_d
                     break;
                 }
                 _ = sighup.recv() => {
-                    log::info!("收到 SIGHUP 信号（配置重载暂未实现，忽略）");
+                    log::info!("收到 SIGHUP 信号，正在重载配置...");
+                    match cc_switch_lib::reload_settings() {
+                        Ok(()) => log::info!("✓ 配置已重载"),
+                        Err(e) => log::error!("✗ 配置重载失败: {e}"),
+                    }
                 }
             }
         }
@@ -546,8 +602,8 @@ async fn setup_signal_handlers(proxy_service: &cc_switch_lib::ProxyService, is_d
 
 /// status: 查看代理服务状态
 fn cmd_status() {
-    let listen_address = std::env::var("CC_SWITCH_LISTEN")
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let listen_address =
+        std::env::var("CC_SWITCH_LISTEN").unwrap_or_else(|_| "127.0.0.1".to_string());
     let listen_port: u16 = std::env::var("CC_SWITCH_PORT")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -558,11 +614,14 @@ fn cmd_status() {
     let daemon_running = daemon_pid.map(|pid| is_process_alive(pid)).unwrap_or(false);
 
     println!("代理服务器状态:");
-    println!("  守护进程: {}", if daemon_running {
-        format!("运行中 (PID: {})", daemon_pid.unwrap())
-    } else {
-        "未运行".to_string()
-    });
+    println!(
+        "  守护进程: {}",
+        if daemon_running {
+            format!("运行中 (PID: {})", daemon_pid.unwrap())
+        } else {
+            "未运行".to_string()
+        }
+    );
 
     // 通过 HTTP 查询代理服务器实际状态（带超时，避免卡住）
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
@@ -575,12 +634,18 @@ fn cmd_status() {
         match client.get(&url).send().await {
             Ok(resp) if resp.status().is_success() => {
                 if let Ok(json) = resp.json::<serde_json::Value>().await {
-                    let running = json.get("running").and_then(|v| v.as_bool()).unwrap_or(false);
+                    let running = json
+                        .get("running")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
                     println!("  代理服务: {}", if running { "运行中" } else { "已停止" });
                     if running {
                         let addr = json.get("address").and_then(|v| v.as_str()).unwrap_or("?");
                         let port = json.get("port").and_then(|v| v.as_u64()).unwrap_or(0);
-                        let uptime = json.get("uptimeSeconds").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let uptime = json
+                            .get("uptimeSeconds")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
                         println!("  监听地址: {addr}:{port}");
                         println!("  运行时间: {}秒", uptime);
                     }
@@ -600,7 +665,15 @@ fn cmd_status() {
                 return;
             }
         };
-        for app_type in &["claude", "claude-desktop", "codex", "gemini", "opencode", "openclaw", "hermes"] {
+        for app_type in &[
+            "claude",
+            "claude-desktop",
+            "codex",
+            "gemini",
+            "opencode",
+            "openclaw",
+            "hermes",
+        ] {
             let current = provider_manager::get_current_provider_id(&db, app_type)
                 .ok()
                 .flatten()
@@ -620,7 +693,15 @@ fn cmd_list_providers(app: Option<&str>) {
         }
     };
 
-    let all_apps = ["claude", "claude-desktop", "codex", "gemini", "opencode", "openclaw", "hermes"];
+    let all_apps = [
+        "claude",
+        "claude-desktop",
+        "codex",
+        "gemini",
+        "opencode",
+        "openclaw",
+        "hermes",
+    ];
     let app_types: Vec<&str> = match app {
         Some(a) => {
             if let Err(e) = validated_app(a) {
@@ -651,7 +732,10 @@ fn cmd_list_providers(app: Option<&str>) {
             .ok()
             .flatten();
 
-        println!("  {:<3} {:<20} {:<30} {}", "ID", "名称", "Base URL", "当前");
+        println!(
+            "  {:<2} {:<20} {:<22} {:<18} {}",
+            "", "ID", "名称", "API 格式", "Base URL"
+        );
         for (id, provider) in &providers {
             let marker = if Some(id.as_str()) == current_id.as_deref() {
                 "*"
@@ -665,13 +749,28 @@ fn cmd_list_providers(app: Option<&str>) {
                 .or_else(|| provider.settings_config.pointer("/baseUrl"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("-");
-            println!("  {marker:<3} {id:<20} {:<30} {}", provider.name, base_url);
+            let api_fmt = provider
+                .meta
+                .as_ref()
+                .and_then(|m| m.api_format.as_deref())
+                .unwrap_or("-");
+            println!(
+                "  {marker:<2} {id:<20} {:<22} {api_fmt:<18} {base_url}",
+                provider.name,
+            );
         }
     }
 }
 
 /// add-provider: 添加供应商
-fn cmd_add_provider(app: &str, id: &str, name: &str, api_key: Option<&str>, base_url: Option<&str>) {
+fn cmd_add_provider(
+    app: &str,
+    id: &str,
+    name: &str,
+    api_key: Option<&str>,
+    base_url: Option<&str>,
+    api_format: Option<&str>,
+) {
     if let Err(e) = validated_app(app) {
         eprintln!("错误: {e}");
         std::process::exit(1);
@@ -703,12 +802,23 @@ fn cmd_add_provider(app: &str, id: &str, name: &str, api_key: Option<&str>, base
         "env": env,
     });
 
-    let provider = cc_switch_lib::Provider::with_id(
-        id.to_string(),
-        name.to_string(),
+    let meta = api_format.map(|fmt| {
+        let mut meta = cc_switch_lib::ProviderMeta::default();
+        meta.api_format = Some(fmt.to_string());
+        meta
+    });
+
+    let provider = cc_switch_lib::Provider {
+        id: id.to_string(),
+        name: name.to_string(),
         settings_config,
-        None,
-    );
+        website_url: None,
+        category: None,
+        created_at: None,
+        sort_index: None,
+        notes: None,
+        meta,
+    };
 
     match db.save_provider(app, &provider) {
         Ok(_) => println!("供应商 '{id}' ({name}) 已添加到 {app}"),
@@ -769,27 +879,30 @@ fn cmd_switch_provider(app: &str, id: &str) {
 
 /// stop: 停止代理服务器（通过 HTTP POST /stop 通知后台进程停止）
 fn cmd_stop() {
-    let listen_address = std::env::var("CC_SWITCH_LISTEN")
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let listen_address =
+        std::env::var("CC_SWITCH_LISTEN").unwrap_or_else(|_| "127.0.0.1".to_string());
     let listen_port: u16 = std::env::var("CC_SWITCH_PORT")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(9090);
 
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
-    
+
     rt.block_on(async {
         let url = format!("http://{}:{}/stop", listen_address, listen_port);
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .build()
             .unwrap_or_default();
-        
+
         match client.post(&url).send().await {
             Ok(resp) => {
                 let status = resp.status();
                 if status.is_success() {
-                    println!("已发送停止信号到代理服务器 {}:{}", listen_address, listen_port);
+                    println!(
+                        "已发送停止信号到代理服务器 {}:{}",
+                        listen_address, listen_port
+                    );
                     // 等待进程退出（最多5秒）
                     for _ in 0..10 {
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -833,14 +946,21 @@ fn cmd_settings(key: Option<&str>, value: Option<&str>) {
             let current = cc_switch_lib::get_settings();
             let merged = merge_settings_for_display(&current, &settings);
             println!("当前设备级设置 (~/.cc-switch/settings.json):");
-            println!("{}", serde_json::to_string_pretty(&merged).unwrap_or_else(|_| "{}".to_string()));
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&merged).unwrap_or_else(|_| "{}".to_string())
+            );
         }
         (Some(k), None) => {
             // 查看指定设置
             let settings = cc_switch_lib::get_settings();
             let json = serde_json::to_value(&settings).unwrap_or_default();
             match json.get(&k) {
-                Some(v) => println!("{} = {}", k, serde_json::to_string_pretty(v).unwrap_or_else(|_| v.to_string())),
+                Some(v) => println!(
+                    "{} = {}",
+                    k,
+                    serde_json::to_string_pretty(v).unwrap_or_else(|_| v.to_string())
+                ),
                 None => {
                     eprintln!("设置项 '{}' 不存在", k);
                     std::process::exit(1);
@@ -894,36 +1014,35 @@ fn cmd_config(key: Option<&str>, value: Option<&str>) {
                 }
             };
             println!("当前数据库配置 (settings 表):");
-            println!("{}", serde_json::to_string_pretty(&settings).unwrap_or_else(|_| "{}".to_string()));
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&settings).unwrap_or_else(|_| "{}".to_string())
+            );
         }
-        (Some(k), None) => {
-            match db.get_setting(k) {
-                Ok(Some(val)) => {
-                    let display = serde_json::from_str::<serde_json::Value>(&val)
-                        .ok()
-                        .and_then(|v| serde_json::to_string_pretty(&v).ok())
-                        .unwrap_or_else(|| val.clone());
-                    println!("{} = {}", k, display);
-                }
-                Ok(None) => {
-                    eprintln!("配置项 '{}' 不存在", k);
-                    std::process::exit(1);
-                }
-                Err(e) => {
-                    eprintln!("获取配置失败: {e}");
-                    std::process::exit(1);
-                }
+        (Some(k), None) => match db.get_setting(k) {
+            Ok(Some(val)) => {
+                let display = serde_json::from_str::<serde_json::Value>(&val)
+                    .ok()
+                    .and_then(|v| serde_json::to_string_pretty(&v).ok())
+                    .unwrap_or_else(|| val.clone());
+                println!("{} = {}", k, display);
             }
-        }
-        (Some(k), Some(v)) => {
-            match db.set_setting(k, v) {
-                Ok(_) => println!("配置 '{}' 已更新", k),
-                Err(e) => {
-                    eprintln!("保存配置失败: {e}");
-                    std::process::exit(1);
-                }
+            Ok(None) => {
+                eprintln!("配置项 '{}' 不存在", k);
+                std::process::exit(1);
             }
-        }
+            Err(e) => {
+                eprintln!("获取配置失败: {e}");
+                std::process::exit(1);
+            }
+        },
+        (Some(k), Some(v)) => match db.set_setting(k, v) {
+            Ok(_) => println!("配置 '{}' 已更新", k),
+            Err(e) => {
+                eprintln!("保存配置失败: {e}");
+                std::process::exit(1);
+            }
+        },
         (None, Some(_)) => {
             eprintln!("错误: 不能只指定 --value 而不指定 --key");
             std::process::exit(1);
@@ -936,52 +1055,114 @@ fn cmd_config(key: Option<&str>, value: Option<&str>) {
 // ============================================================================
 
 /// update-provider: 更新供应商配置
-fn cmd_update_provider(app: &str, id: &str, name: Option<&str>, api_key: Option<&str>, base_url: Option<&str>) {
+fn cmd_update_provider(
+    app: &str,
+    id: &str,
+    name: Option<&str>,
+    api_key: Option<&str>,
+    base_url: Option<&str>,
+    api_format: Option<&str>,
+    clear_api_format: bool,
+) {
     if let Err(e) = validated_app(app) {
         eprintln!("错误: {e}");
         std::process::exit(1);
     }
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
 
     let providers = match db.get_all_providers(app) {
         Ok(p) => p,
-        Err(e) => { eprintln!("获取供应商失败: {e}"); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("获取供应商失败: {e}");
+            std::process::exit(1);
+        }
     };
     let provider = match providers.get(id) {
         Some(p) => p.clone(),
-        None => { eprintln!("供应商 '{id}' 不存在"); std::process::exit(1); }
+        None => {
+            eprintln!("供应商 '{id}' 不存在");
+            std::process::exit(1);
+        }
     };
 
     let mut settings_config = provider.settings_config.clone();
-    if let Some(env) = settings_config.get_mut("env").and_then(|v| v.as_object_mut()) {
+    if let Some(env) = settings_config
+        .get_mut("env")
+        .and_then(|v| v.as_object_mut())
+    {
         if let Some(key) = api_key {
-            env.insert("ANTHROPIC_API_KEY".to_string(), serde_json::Value::String(key.to_string()));
+            env.insert(
+                "ANTHROPIC_API_KEY".to_string(),
+                serde_json::Value::String(key.to_string()),
+            );
         }
         if let Some(url) = base_url {
-            env.insert("ANTHROPIC_BASE_URL".to_string(), serde_json::Value::String(url.to_string()));
+            env.insert(
+                "ANTHROPIC_BASE_URL".to_string(),
+                serde_json::Value::String(url.to_string()),
+            );
         }
     } else if api_key.is_some() || base_url.is_some() {
         let mut env = serde_json::Map::new();
         if let Some(key) = api_key {
-            env.insert("ANTHROPIC_API_KEY".to_string(), serde_json::Value::String(key.to_string()));
+            env.insert(
+                "ANTHROPIC_API_KEY".to_string(),
+                serde_json::Value::String(key.to_string()),
+            );
         }
         if let Some(url) = base_url {
-            env.insert("ANTHROPIC_BASE_URL".to_string(), serde_json::Value::String(url.to_string()));
+            env.insert(
+                "ANTHROPIC_BASE_URL".to_string(),
+                serde_json::Value::String(url.to_string()),
+            );
         }
         settings_config["env"] = serde_json::Value::Object(env);
     }
 
+    // 保留已有 meta，按需更新 api_format
+    let mut meta = provider.meta.unwrap_or_default();
+    if clear_api_format {
+        meta.api_format = None;
+    } else if let Some(fmt) = api_format {
+        meta.api_format = Some(fmt.to_string());
+    }
+
     let new_name = name.map(|s| s.to_string()).unwrap_or(provider.name);
-    let updated = cc_switch_lib::Provider::with_id(id.to_string(), new_name, settings_config, provider.category.clone());
+    let updated = cc_switch_lib::Provider {
+        id: id.to_string(),
+        name: new_name,
+        settings_config,
+        website_url: provider.website_url,
+        category: provider.category,
+        created_at: provider.created_at,
+        sort_index: provider.sort_index,
+        notes: provider.notes,
+        meta: Some(meta),
+    };
     match db.save_provider(app, &updated) {
         Ok(_) => println!("供应商 '{id}' 已更新"),
-        Err(e) => { eprintln!("更新供应商失败: {e}"); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("更新供应商失败: {e}");
+            std::process::exit(1);
+        }
     }
 }
 
 /// takeover: 设置/查看代理接管状态
 fn cmd_takeover(app: &str, enabled: Option<&str>) {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     let proxy_service = cc_switch_lib::ProxyService::new(db);
 
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
@@ -992,22 +1173,52 @@ fn cmd_takeover(app: &str, enabled: Option<&str>) {
                 match proxy_service.get_takeover_status().await {
                     Ok(status) => {
                         println!("代理接管状态:");
-                        println!("  claude: {}", if status.claude { "已接管" } else { "未接管" });
-                        println!("  codex:  {}", if status.codex { "已接管" } else { "未接管" });
-                        println!("  gemini: {}", if status.gemini { "已接管" } else { "未接管" });
+                        println!(
+                            "  claude: {}",
+                            if status.claude {
+                                "已接管"
+                            } else {
+                                "未接管"
+                            }
+                        );
+                        println!(
+                            "  codex:  {}",
+                            if status.codex {
+                                "已接管"
+                            } else {
+                                "未接管"
+                            }
+                        );
+                        println!(
+                            "  gemini: {}",
+                            if status.gemini {
+                                "已接管"
+                            } else {
+                                "未接管"
+                            }
+                        );
                     }
-                    Err(e) => { eprintln!("获取接管状态失败: {e}"); std::process::exit(1); }
+                    Err(e) => {
+                        eprintln!("获取接管状态失败: {e}");
+                        std::process::exit(1);
+                    }
                 }
             }
             Some(val) => {
                 let enable = match val.to_lowercase().as_str() {
                     "on" | "true" | "1" => true,
                     "off" | "false" | "0" => false,
-                    _ => { eprintln!("无效的值: {val}，请使用 on/off"); std::process::exit(1); }
+                    _ => {
+                        eprintln!("无效的值: {val}，请使用 on/off");
+                        std::process::exit(1);
+                    }
                 };
                 match proxy_service.set_takeover_for_app(app, enable).await {
                     Ok(_) => println!("{} 接管已{}", app, if enable { "开启" } else { "关闭" }),
-                    Err(e) => { eprintln!("设置接管失败: {e}"); std::process::exit(1); }
+                    Err(e) => {
+                        eprintln!("设置接管失败: {e}");
+                        std::process::exit(1);
+                    }
                 }
             }
         }
@@ -1016,78 +1227,154 @@ fn cmd_takeover(app: &str, enabled: Option<&str>) {
 
 /// switch-proxy: 代理模式下热切换供应商
 fn cmd_switch_proxy(app: &str, id: &str) {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     let proxy_service = cc_switch_lib::ProxyService::new(db);
 
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async move {
         match proxy_service.hot_switch_provider(app, id).await {
-            Ok(result) => println!("已热切换 {} 到供应商 '{id}' (逻辑目标变更: {})", app, result.logical_target_changed),
-            Err(e) => { eprintln!("热切换失败: {e}"); std::process::exit(1); }
+            Ok(result) => println!(
+                "已热切换 {} 到供应商 '{id}' (逻辑目标变更: {})",
+                app, result.logical_target_changed
+            ),
+            Err(e) => {
+                eprintln!("热切换失败: {e}");
+                std::process::exit(1);
+            }
         }
     });
 }
 
 /// failover-queue: 查看/管理故障转移队列
 fn cmd_failover_queue(action: &str, app: Option<&str>, id: Option<&str>) {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
-    let app = match app { Some(a) => a, None => { eprintln!("请指定应用类型"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
+    let app = match app {
+        Some(a) => a,
+        None => {
+            eprintln!("请指定应用类型");
+            std::process::exit(1);
+        }
+    };
 
     match action {
-        "list" => {
-            match db.get_failover_queue(app) {
-                Ok(queue) => {
-                    println!("故障转移队列 ({app}):");
-                    if queue.is_empty() {
-                        println!("  (空)");
-                    } else {
-                        for (i, item) in queue.iter().enumerate() {
-                            println!("  {}. {} (sort_index: {:?})", i + 1, item.provider_id, item.sort_index);
-                        }
+        "list" => match db.get_failover_queue(app) {
+            Ok(queue) => {
+                println!("故障转移队列 ({app}):");
+                if queue.is_empty() {
+                    println!("  (空)");
+                } else {
+                    for (i, item) in queue.iter().enumerate() {
+                        println!(
+                            "  {}. {} (sort_index: {:?})",
+                            i + 1,
+                            item.provider_id,
+                            item.sort_index
+                        );
                     }
                 }
-                Err(e) => { eprintln!("获取队列失败: {e}"); std::process::exit(1); }
             }
-        }
+            Err(e) => {
+                eprintln!("获取队列失败: {e}");
+                std::process::exit(1);
+            }
+        },
         "add" => {
-            let id = match id { Some(i) => i, None => { eprintln!("请指定供应商 ID"); std::process::exit(1); } };
+            let id = match id {
+                Some(i) => i,
+                None => {
+                    eprintln!("请指定供应商 ID");
+                    std::process::exit(1);
+                }
+            };
             match db.add_to_failover_queue(app, id) {
                 Ok(_) => println!("已添加 '{id}' 到 {app} 故障转移队列"),
-                Err(e) => { eprintln!("添加失败: {e}"); std::process::exit(1); }
+                Err(e) => {
+                    eprintln!("添加失败: {e}");
+                    std::process::exit(1);
+                }
             }
         }
         "remove" => {
-            let id = match id { Some(i) => i, None => { eprintln!("请指定供应商 ID"); std::process::exit(1); } };
+            let id = match id {
+                Some(i) => i,
+                None => {
+                    eprintln!("请指定供应商 ID");
+                    std::process::exit(1);
+                }
+            };
             match db.remove_from_failover_queue(app, id) {
                 Ok(_) => println!("已从 {app} 队列移除 '{id}'"),
-                Err(e) => { eprintln!("移除失败: {e}"); std::process::exit(1); }
+                Err(e) => {
+                    eprintln!("移除失败: {e}");
+                    std::process::exit(1);
+                }
             }
         }
-        _ => { eprintln!("未知操作: {action}，支持: list, add, remove"); std::process::exit(1); }
+        _ => {
+            eprintln!("未知操作: {action}，支持: list, add, remove");
+            std::process::exit(1);
+        }
     }
 }
 
 /// auto-failover: 查看/设置自动故障转移
 fn cmd_auto_failover(app: Option<&str>, enabled: Option<&str>) {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     match enabled {
         None => {
             for app_type in ["claude", "codex", "gemini"] {
                 let (_, auto_enabled) = db.get_proxy_flags_sync(app_type);
-                println!("  {app_type}: {}", if auto_enabled { "开启" } else { "关闭" });
+                println!(
+                    "  {app_type}: {}",
+                    if auto_enabled { "开启" } else { "关闭" }
+                );
             }
         }
         Some(val) => {
-            let app = match app { Some(a) => a, None => { eprintln!("设置时请指定应用类型"); std::process::exit(1); } };
+            let app = match app {
+                Some(a) => a,
+                None => {
+                    eprintln!("设置时请指定应用类型");
+                    std::process::exit(1);
+                }
+            };
             let enable = match val.to_lowercase().as_str() {
                 "on" | "true" | "1" => true,
                 "off" | "false" | "0" => false,
-                _ => { eprintln!("无效的值: {val}"); std::process::exit(1); }
+                _ => {
+                    eprintln!("无效的值: {val}");
+                    std::process::exit(1);
+                }
             };
             let (current_enabled, _) = db.get_proxy_flags_sync(app);
             match db.set_proxy_flags_sync(app, current_enabled, enable) {
-                Ok(_) => println!("{} 自动故障转移已{}", app, if enable { "开启" } else { "关闭" }),
-                Err(e) => { eprintln!("设置失败: {e}"); std::process::exit(1); }
+                Ok(_) => println!(
+                    "{} 自动故障转移已{}",
+                    app,
+                    if enable { "开启" } else { "关闭" }
+                ),
+                Err(e) => {
+                    eprintln!("设置失败: {e}");
+                    std::process::exit(1);
+                }
             }
         }
     }
@@ -1095,7 +1382,13 @@ fn cmd_auto_failover(app: Option<&str>, enabled: Option<&str>) {
 
 /// circuit-breaker: 查看/设置/重置熔断器
 fn cmd_circuit_breaker(action: &str, app: Option<&str>, id: Option<&str>, config: Option<&str>) {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     let proxy_service = cc_switch_lib::ProxyService::new(db.clone());
 
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
@@ -1104,82 +1397,183 @@ fn cmd_circuit_breaker(action: &str, app: Option<&str>, id: Option<&str>, config
             "get" => {
                 let app = app.unwrap_or("claude");
                 match db.get_circuit_breaker_config().await {
-                    Ok(cfg) => println!("{} 熔断器配置:\n{}", app, serde_json::to_string_pretty(&cfg).unwrap_or_default()),
-                    Err(e) => { eprintln!("获取失败: {e}"); std::process::exit(1); }
+                    Ok(cfg) => println!(
+                        "{} 熔断器配置:\n{}",
+                        app,
+                        serde_json::to_string_pretty(&cfg).unwrap_or_default()
+                    ),
+                    Err(e) => {
+                        eprintln!("获取失败: {e}");
+                        std::process::exit(1);
+                    }
                 }
             }
             "set" => {
-                let app = match app { Some(a) => a, None => { eprintln!("请指定应用类型"); std::process::exit(1); } };
-                let config_json = match config { Some(c) => c, None => { eprintln!("请用 --config 指定配置 JSON"); std::process::exit(1); } };
-                let cfg: cc_switch_lib::CircuitBreakerConfig = match serde_json::from_str(config_json) {
-                    Ok(c) => c,
-                    Err(e) => { eprintln!("解析配置失败: {e}"); std::process::exit(1); }
+                let app = match app {
+                    Some(a) => a,
+                    None => {
+                        eprintln!("请指定应用类型");
+                        std::process::exit(1);
+                    }
                 };
-                match proxy_service.update_circuit_breaker_config_for_app(app, cfg).await {
+                let config_json = match config {
+                    Some(c) => c,
+                    None => {
+                        eprintln!("请用 --config 指定配置 JSON");
+                        std::process::exit(1);
+                    }
+                };
+                let cfg: cc_switch_lib::CircuitBreakerConfig =
+                    match serde_json::from_str(config_json) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("解析配置失败: {e}");
+                            std::process::exit(1);
+                        }
+                    };
+                match proxy_service
+                    .update_circuit_breaker_config_for_app(app, cfg)
+                    .await
+                {
                     Ok(_) => println!("{} 熔断器配置已更新", app),
-                    Err(e) => { eprintln!("设置失败: {e}"); std::process::exit(1); }
+                    Err(e) => {
+                        eprintln!("设置失败: {e}");
+                        std::process::exit(1);
+                    }
                 }
             }
             "reset" => {
-                let app = match app { Some(a) => a, None => { eprintln!("请指定应用类型"); std::process::exit(1); } };
-                let id = match id { Some(i) => i, None => { eprintln!("请指定供应商 ID"); std::process::exit(1); } };
+                let app = match app {
+                    Some(a) => a,
+                    None => {
+                        eprintln!("请指定应用类型");
+                        std::process::exit(1);
+                    }
+                };
+                let id = match id {
+                    Some(i) => i,
+                    None => {
+                        eprintln!("请指定供应商 ID");
+                        std::process::exit(1);
+                    }
+                };
                 let _ = proxy_service.reset_provider_circuit_breaker(id, app).await;
                 println!("已重置 {app}/{id} 的熔断器");
             }
-            _ => { eprintln!("未知操作: {action}，支持: get, set, reset"); std::process::exit(1); }
+            _ => {
+                eprintln!("未知操作: {action}，支持: get, set, reset");
+                std::process::exit(1);
+            }
         }
     });
 }
 
 /// rectifier: 查看/设置请求修正器配置
 fn cmd_rectifier(action: &str, config: Option<&str>) {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     match action {
         "get" => match db.get_rectifier_config() {
             Ok(cfg) => println!("{}", serde_json::to_string_pretty(&cfg).unwrap_or_default()),
-            Err(e) => { eprintln!("获取失败: {e}"); std::process::exit(1); }
-        },
-        "set" => {
-            let config_json = match config { Some(c) => c, None => { eprintln!("请用 --config 指定配置 JSON"); std::process::exit(1); } };
-            match db.set_setting("rectifier_config", config_json) {
-                Ok(_) => println!("修正器配置已更新"),
-                Err(e) => { eprintln!("设置失败: {e}"); std::process::exit(1); }
+            Err(e) => {
+                eprintln!("获取失败: {e}");
+                std::process::exit(1);
             }
         },
-        _ => { eprintln!("未知操作: {action}，支持: get, set"); std::process::exit(1); }
+        "set" => {
+            let config_json = match config {
+                Some(c) => c,
+                None => {
+                    eprintln!("请用 --config 指定配置 JSON");
+                    std::process::exit(1);
+                }
+            };
+            match db.set_setting("rectifier_config", config_json) {
+                Ok(_) => println!("修正器配置已更新"),
+                Err(e) => {
+                    eprintln!("设置失败: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        _ => {
+            eprintln!("未知操作: {action}，支持: get, set");
+            std::process::exit(1);
+        }
     }
 }
 
 /// optimizer: 查看/设置优化器配置
 fn cmd_optimizer(action: &str, config: Option<&str>) {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     match action {
         "get" => match db.get_optimizer_config() {
             Ok(cfg) => println!("{}", serde_json::to_string_pretty(&cfg).unwrap_or_default()),
-            Err(e) => { eprintln!("获取失败: {e}"); std::process::exit(1); }
-        },
-        "set" => {
-            let config_json = match config { Some(c) => c, None => { eprintln!("请用 --config 指定配置 JSON"); std::process::exit(1); } };
-            match db.set_setting("optimizer_config", config_json) {
-                Ok(_) => println!("优化器配置已更新"),
-                Err(e) => { eprintln!("设置失败: {e}"); std::process::exit(1); }
+            Err(e) => {
+                eprintln!("获取失败: {e}");
+                std::process::exit(1);
             }
         },
-        _ => { eprintln!("未知操作: {action}，支持: get, set"); std::process::exit(1); }
+        "set" => {
+            let config_json = match config {
+                Some(c) => c,
+                None => {
+                    eprintln!("请用 --config 指定配置 JSON");
+                    std::process::exit(1);
+                }
+            };
+            match db.set_setting("optimizer_config", config_json) {
+                Ok(_) => println!("优化器配置已更新"),
+                Err(e) => {
+                    eprintln!("设置失败: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        _ => {
+            eprintln!("未知操作: {action}，支持: get, set");
+            std::process::exit(1);
+        }
     }
 }
 
 /// global-proxy: 查看/设置全局出站代理
 fn cmd_global_proxy(action: &str, url: Option<&str>) {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     match action {
         "get" => match db.get_global_proxy_url() {
             Ok(Some(url)) => println!("全局出站代理: {url}"),
             Ok(None) => println!("全局出站代理: 未设置"),
-            Err(e) => { eprintln!("获取失败: {e}"); std::process::exit(1); }
+            Err(e) => {
+                eprintln!("获取失败: {e}");
+                std::process::exit(1);
+            }
         },
         "set" => {
-            let url = match url { Some(u) => u, None => { eprintln!("请指定代理 URL"); std::process::exit(1); } };
+            let url = match url {
+                Some(u) => u,
+                None => {
+                    eprintln!("请指定代理 URL");
+                    std::process::exit(1);
+                }
+            };
             match db.set_global_proxy_url(Some(url)) {
                 Ok(_) => {
                     if let Err(e) = cc_switch_lib::http_client::init(Some(url)) {
@@ -1187,43 +1581,69 @@ fn cmd_global_proxy(action: &str, url: Option<&str>) {
                     }
                     println!("全局出站代理已设置为: {url}");
                 }
-                Err(e) => { eprintln!("设置失败: {e}"); std::process::exit(1); }
-            }
-        },
-        "clear" => {
-            match db.set_global_proxy_url(None) {
-                Ok(_) => {
-                    let _ = cc_switch_lib::http_client::init(None);
-                    println!("全局出站代理已清除");
+                Err(e) => {
+                    eprintln!("设置失败: {e}");
+                    std::process::exit(1);
                 }
-                Err(e) => { eprintln!("清除失败: {e}"); std::process::exit(1); }
+            }
+        }
+        "clear" => match db.set_global_proxy_url(None) {
+            Ok(_) => {
+                let _ = cc_switch_lib::http_client::init(None);
+                println!("全局出站代理已清除");
+            }
+            Err(e) => {
+                eprintln!("清除失败: {e}");
+                std::process::exit(1);
             }
         },
         "test" => {
-            let url = match url.map(|s| s.to_string()).or_else(|| db.get_global_proxy_url().ok().flatten()) {
+            let url = match url
+                .map(|s| s.to_string())
+                .or_else(|| db.get_global_proxy_url().ok().flatten())
+            {
                 Some(u) => u,
-                None => { eprintln!("未设置代理 URL"); std::process::exit(1); }
+                None => {
+                    eprintln!("未设置代理 URL");
+                    std::process::exit(1);
+                }
             };
             let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
             rt.block_on(async {
                 let start = std::time::Instant::now();
                 let client = reqwest::Client::builder()
-                    .proxy(reqwest::Proxy::all(&url).unwrap_or_else(|_| reqwest::Proxy::all("http://127.0.0.1").unwrap()))
+                    .proxy(
+                        reqwest::Proxy::all(&url)
+                            .unwrap_or_else(|_| reqwest::Proxy::all("http://127.0.0.1").unwrap()),
+                    )
                     .timeout(std::time::Duration::from_secs(10))
                     .build();
                 match client {
                     Ok(c) => match c.get("https://httpbin.org/get").send().await {
                         Ok(resp) => {
                             let elapsed = start.elapsed();
-                            println!("代理连接测试成功: {url} (HTTP {}, {}ms)", resp.status(), elapsed.as_millis());
+                            println!(
+                                "代理连接测试成功: {url} (HTTP {}, {}ms)",
+                                resp.status(),
+                                elapsed.as_millis()
+                            );
                         }
-                        Err(e) => { eprintln!("代理连接测试失败: {e}"); std::process::exit(1); }
+                        Err(e) => {
+                            eprintln!("代理连接测试失败: {e}");
+                            std::process::exit(1);
+                        }
                     },
-                    Err(e) => { eprintln!("构建代理客户端失败: {e}"); std::process::exit(1); }
+                    Err(e) => {
+                        eprintln!("构建代理客户端失败: {e}");
+                        std::process::exit(1);
+                    }
                 }
             });
-        },
-        _ => { eprintln!("未知操作: {action}，支持: get, set, clear, test"); std::process::exit(1); }
+        }
+        _ => {
+            eprintln!("未知操作: {action}，支持: get, set, clear, test");
+            std::process::exit(1);
+        }
     }
 }
 
@@ -1233,7 +1653,13 @@ fn cmd_global_proxy(action: &str, url: Option<&str>) {
 
 /// list-mcp: 列出 MCP 服务器
 fn cmd_list_mcp() {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     match db.get_all_mcp_servers() {
         Ok(servers) => {
             if servers.is_empty() {
@@ -1245,24 +1671,42 @@ fn cmd_list_mcp() {
                 println!("{:<3} {:<25} {:<20}", i + 1, server.name, id);
             }
         }
-        Err(e) => { eprintln!("获取 MCP 列表失败: {e}"); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("获取 MCP 列表失败: {e}");
+            std::process::exit(1);
+        }
     }
 }
 
 /// list-prompts: 列出 Prompts
 fn cmd_list_prompts(app: Option<&str>) {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     let apps: Vec<&str> = match app {
         Some(a) => vec![a],
-        None => vec!["claude", "codex", "gemini", "opencode", "openclaw", "hermes"],
+        None => vec![
+            "claude", "codex", "gemini", "opencode", "openclaw", "hermes",
+        ],
     };
     for app_type in &apps {
         match db.get_prompts(app_type) {
             Ok(prompts) => {
-                if prompts.is_empty() { continue; }
+                if prompts.is_empty() {
+                    continue;
+                }
                 println!("\n── {app_type} ──");
                 for (id, prompt) in &prompts {
-                    println!("  {} {} {}", if prompt.enabled { "*" } else { " " }, id, prompt.name);
+                    println!(
+                        "  {} {} {}",
+                        if prompt.enabled { "*" } else { " " },
+                        id,
+                        prompt.name
+                    );
                 }
             }
             Err(e) => log::debug!("获取 {app_type} prompts 失败: {e}"),
@@ -1272,32 +1716,59 @@ fn cmd_list_prompts(app: Option<&str>) {
 
 /// export-config: 导出配置
 fn cmd_export_config(path: &str) {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     match db.export_sql(std::path::Path::new(path)) {
         Ok(_) => println!("配置已导出到 {path}"),
-        Err(e) => { eprintln!("导出失败: {e}"); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("导出失败: {e}");
+            std::process::exit(1);
+        }
     }
 }
 
 /// import-config: 导入配置
 fn cmd_import_config(path: &str) {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     match db.import_sql(std::path::Path::new(path)) {
         Ok(msg) => println!("配置导入成功: {msg}"),
-        Err(e) => { eprintln!("导入失败: {e}"); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("导入失败: {e}");
+            std::process::exit(1);
+        }
     }
 }
 
 /// backup-create: 创建数据库备份（导出 SQL 到备份目录）
 fn cmd_backup_create() {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     let backup_dir = cc_switch_lib::get_app_config_dir().join("backups");
     let _ = std::fs::create_dir_all(&backup_dir);
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     let backup_path = backup_dir.join(format!("cc-switch-backup-{timestamp}.sql"));
     match db.export_sql(&backup_path) {
         Ok(_) => println!("备份已创建: {}", backup_path.display()),
-        Err(e) => { eprintln!("创建备份失败: {e}"); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("创建备份失败: {e}");
+            std::process::exit(1);
+        }
     }
 }
 
@@ -1311,35 +1782,97 @@ fn cmd_backup_list() {
             }
             println!("{:<40} {:<12} {}", "文件名", "大小", "创建时间");
             for b in &backups {
-                println!("{:<40} {:<12} {}", b.filename, format!("{} KB", b.size_bytes / 1024), b.created_at);
+                println!(
+                    "{:<40} {:<12} {}",
+                    b.filename,
+                    format!("{} KB", b.size_bytes / 1024),
+                    b.created_at
+                );
             }
         }
-        Err(e) => { eprintln!("列出备份失败: {e}"); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("列出备份失败: {e}");
+            std::process::exit(1);
+        }
     }
 }
 
 /// backup-restore: 从备份恢复
 fn cmd_backup_restore(name: &str) {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     match db.restore_from_backup(name) {
         Ok(msg) => println!("已从备份 '{name}' 恢复: {msg}"),
-        Err(e) => { eprintln!("恢复失败: {e}"); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("恢复失败: {e}");
+            std::process::exit(1);
+        }
     }
 }
 
-/// usage-summary: 查看用量统计摘要（简化版：查询请求日志总数）
+/// usage-summary: 查看用量统计摘要（基于实际请求日志）
 fn cmd_usage_summary(days: u32) {
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
-    // 简化实现：通过 settings 表查看用量统计相关的键
-    match db.get_setting("usage_summary_cache") {
-        Ok(Some(json)) => {
-            println!("用量统计缓存 (最近 {days} 天):");
-            println!("{json}");
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
         }
-        _ => {
-            println!("暂无用量统计缓存数据。");
-            println!("提示：用量统计需要代理服务器运行时自动同步会话日志。");
-            println!("      请确保 cc-switch-cli daemon 正在运行以启用用量同步。");
+    };
+
+    let end_date = chrono::Utc::now().timestamp();
+    let start_date = end_date - (days as i64) * 24 * 3600;
+
+    match db.get_usage_summary(Some(start_date), Some(end_date), None, None, None) {
+        Ok(summary) => {
+            println!("用量统计 (最近 {days} 天):");
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            println!("  总请求数:       {}", summary.total_requests);
+            println!(
+                "  总成本:         ${}",
+                summary.total_cost
+            );
+            println!(
+                "  输入 Token:     {}",
+                format_tokens(summary.total_input_tokens)
+            );
+            println!(
+                "  输出 Token:     {}",
+                format_tokens(summary.total_output_tokens)
+            );
+            println!(
+                "  缓存写入 Token: {}",
+                format_tokens(summary.total_cache_creation_tokens)
+            );
+            println!(
+                "  缓存读取 Token: {}",
+                format_tokens(summary.total_cache_read_tokens)
+            );
+            println!(
+                "  实际总 Token:   {}",
+                format_tokens(summary.real_total_tokens)
+            );
+            println!(
+                "  成功率:         {:.1}%",
+                summary.success_rate * 100.0
+            );
+            println!(
+                "  缓存命中率:     {:.1}%",
+                summary.cache_hit_rate * 100.0
+            );
+
+            if summary.total_requests == 0 {
+                println!("\n提示：暂无请求记录。请确保代理服务器正在运行以记录用量数据。");
+            }
+        }
+        Err(e) => {
+            eprintln!("查询用量统计失败: {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1348,19 +1881,27 @@ fn cmd_usage_summary(days: u32) {
 fn cmd_speedtest(url: &str, timeout: u64) {
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async {
-        match cc_switch_lib::SpeedtestService::test_endpoints(
-            vec![url.to_string()],
-            Some(timeout),
-        ).await {
+        match cc_switch_lib::SpeedtestService::test_endpoints(vec![url.to_string()], Some(timeout))
+            .await
+        {
             Ok(results) => {
                 for r in &results {
                     match &r.latency {
-                        Some(ms) => println!("{} 延迟: {}ms (HTTP {})", r.url, ms, r.status.unwrap_or(0)),
-                        None => println!("{} 失败: {}", r.url, r.error.as_deref().unwrap_or("未知错误")),
+                        Some(ms) => {
+                            println!("{} 延迟: {}ms (HTTP {})", r.url, ms, r.status.unwrap_or(0))
+                        }
+                        None => println!(
+                            "{} 失败: {}",
+                            r.url,
+                            r.error.as_deref().unwrap_or("未知错误")
+                        ),
                     }
                 }
             }
-            Err(e) => { eprintln!("测速失败: {e}"); std::process::exit(1); }
+            Err(e) => {
+                eprintln!("测速失败: {e}");
+                std::process::exit(1);
+            }
         }
     });
 }
@@ -1383,12 +1924,19 @@ fn cmd_verify_key(base_url: &str, api_key: &str) {
                 let elapsed = start.elapsed();
                 let status = resp.status();
                 if status.is_success() {
-                    println!("API Key 验证成功: {base_url} (HTTP {}, {}ms)", status, elapsed.as_millis());
+                    println!(
+                        "API Key 验证成功: {base_url} (HTTP {}, {}ms)",
+                        status,
+                        elapsed.as_millis()
+                    );
                 } else {
                     println!("API Key 验证失败: {base_url} (HTTP {})", status);
                 }
             }
-            Err(e) => { eprintln!("验证失败: {e}"); std::process::exit(1); }
+            Err(e) => {
+                eprintln!("验证失败: {e}");
+                std::process::exit(1);
+            }
         }
     });
 }
@@ -1408,7 +1956,14 @@ fn cmd_validate(path: &str) {
             println!("✓ 配置文件校验通过");
             println!("  供应商数量: {}", config.providers.len());
             println!("  故障转移队列: {} 个应用", config.failover.queue.len());
-            println!("  全局代理: {}", if config.global_proxy.is_some() { "已配置" } else { "未配置" });
+            println!(
+                "  全局代理: {}",
+                if config.global_proxy.is_some() {
+                    "已配置"
+                } else {
+                    "未配置"
+                }
+            );
             println!("  代理接管: {} 个应用", config.proxy.takeover.len());
         }
         Err(e) => {
@@ -1422,19 +1977,31 @@ fn cmd_validate(path: &str) {
 fn cmd_apply_config(path: &str) {
     let config = match cc_switch_lib::core::decl_config::DeclConfig::from_yaml_file(path) {
         Ok(c) => c,
-        Err(e) => { eprintln!("加载配置文件失败: {e}"); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("加载配置文件失败: {e}");
+            std::process::exit(1);
+        }
     };
     if let Err(e) = config.validate() {
         eprintln!("配置校验失败: {e}");
         std::process::exit(1);
     }
-    let db = match init_db() { Ok(d) => d, Err(e) => { eprintln!("错误: {e}"); std::process::exit(1); } };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
     match config.apply(&db) {
         Ok(summary) => {
             println!("✓ 配置已应用:");
             println!("{summary}");
         }
-        Err(e) => { eprintln!("应用配置失败: {e}"); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("应用配置失败: {e}");
+            std::process::exit(1);
+        }
     }
 }
 
@@ -1457,8 +2024,8 @@ fn cmd_help() {
     println!();
     println!("  供应商管理:");
     println!("    list-providers [APP]        列出供应商");
-    println!("    add-provider <APP> <ID> <NAME> [--api-key K] [--base-url U]");
-    println!("    update-provider <APP> <ID> [--name N] [--api-key K] [--base-url U]");
+    println!("    add-provider <APP> <ID> <NAME> [--api-key K] [--base-url U] [--api-format F]");
+    println!("    update-provider <APP> <ID> [--name N] [--api-key K] [--base-url U] [--api-format F] [--clear-api-format]");
     println!("    remove-provider <APP> <ID>  删除供应商");
     println!("    switch-provider <APP> <ID>  切换当前供应商");
     println!();
@@ -1506,7 +2073,9 @@ fn cmd_help() {
 
 /// 初始化数据库连接
 fn init_db() -> Result<Arc<Database>, String> {
-    Database::init().map(Arc::new).map_err(|e| format!("数据库初始化失败: {e}"))
+    Database::init()
+        .map(Arc::new)
+        .map_err(|e| format!("数据库初始化失败: {e}"))
 }
 
 /// 检查应用类型是否合法
@@ -1530,6 +2099,22 @@ fn validated_app(app: &str) -> Result<(), String> {
 }
 
 /// 合并设置用于显示（将当前值与默认值合并）
-fn merge_settings_for_display(current: &cc_switch_lib::AppSettings, _default: &cc_switch_lib::AppSettings) -> cc_switch_lib::AppSettings {
+fn merge_settings_for_display(
+    current: &cc_switch_lib::AppSettings,
+    _default: &cc_switch_lib::AppSettings,
+) -> cc_switch_lib::AppSettings {
     current.clone()
+}
+
+/// 格式化 Token 数量为可读字符串（K/M/B）
+fn format_tokens(count: u64) -> String {
+    if count >= 1_000_000_000 {
+        format!("{:.2}B", count as f64 / 1_000_000_000.0)
+    } else if count >= 1_000_000 {
+        format!("{:.2}M", count as f64 / 1_000_000.0)
+    } else if count >= 1_000 {
+        format!("{:.1f}K", count as f64 / 1_000.0)
+    } else {
+        count.to_string()
+    }
 }

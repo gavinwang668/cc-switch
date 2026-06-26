@@ -85,7 +85,10 @@ fn persist_auto_sync_error(settings: &mut WebDavSyncSettings, error: &AppError) 
     let _ = settings::update_webdav_sync_status(settings.status.clone());
 }
 
-fn emit_auto_sync_status_updated(app: &AppHandle, status: &str, error: Option<&str>) {
+fn emit_auto_sync_status_updated(app: Option<&AppHandle>, status: &str, error: Option<&str>) {
+    let Some(app) = app else {
+        return; // headless mode: no frontend to emit to
+    };
     let payload = match error {
         Some(message) => json!({
             "source": "auto",
@@ -105,7 +108,7 @@ fn emit_auto_sync_status_updated(app: &AppHandle, status: &str, error: Option<&s
 
 async fn run_auto_sync_upload(
     db: &crate::database::Database,
-    app: &AppHandle,
+    app: Option<&AppHandle>,
 ) -> Result<(), AppError> {
     let mut settings = settings::get_webdav_sync_settings();
     if !should_run_auto_sync(settings.as_ref()) {
@@ -148,7 +151,7 @@ pub fn notify_db_changed(table: &str) {
     let _ = enqueue_change_signal(tx, table);
 }
 
-pub fn start_worker(db: Arc<crate::database::Database>, app: tauri::AppHandle) {
+pub fn start_worker(db: Arc<crate::database::Database>, app: Option<tauri::AppHandle>) {
     if DB_CHANGE_TX.get().is_some() {
         return;
     }
@@ -159,7 +162,7 @@ pub fn start_worker(db: Arc<crate::database::Database>, app: tauri::AppHandle) {
         return;
     }
 
-    tauri::async_runtime::spawn(async move {
+    tokio::spawn(async move {
         run_worker_loop(db, rx, app).await;
     });
 }
@@ -167,7 +170,7 @@ pub fn start_worker(db: Arc<crate::database::Database>, app: tauri::AppHandle) {
 async fn run_worker_loop(
     db: Arc<crate::database::Database>,
     mut rx: Receiver<String>,
-    app: tauri::AppHandle,
+    app: Option<tauri::AppHandle>,
 ) {
     while let Some(first_table) = rx.recv().await {
         let started_at = Instant::now();
@@ -187,7 +190,8 @@ async fn run_worker_loop(
             "[WebDAV][AutoSync] Triggered by table={first_table}, merged_changes={merged_count}"
         );
 
-        if let Err(err) = run_auto_sync_upload(&db, &app).await {
+        let app_ref = app.as_ref();
+        if let Err(err) = run_auto_sync_upload(&db, app_ref).await {
             log::warn!("[WebDAV][AutoSync] Upload failed: {err}");
         }
     }

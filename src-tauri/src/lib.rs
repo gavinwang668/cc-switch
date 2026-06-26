@@ -62,7 +62,7 @@ pub use services::{
     ConfigService, EndpointLatency, McpService, PromptService, ProviderService, ProxyService,
     SkillService, SpeedtestService,
 };
-pub use settings::{get_settings, update_settings, AppSettings};
+pub use settings::{get_settings, reload_settings, update_settings, AppSettings};
 pub use store::AppState;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
@@ -963,11 +963,11 @@ pub fn run() {
             let _tray = tray_builder.build(app)?;
             crate::services::webdav_auto_sync::start_worker(
                 app_state.db.clone(),
-                app.handle().clone(),
+                Some(app.handle().clone()),
             );
             crate::services::s3_auto_sync::start_worker(
                 app_state.db.clone(),
-                app.handle().clone(),
+                Some(app.handle().clone()),
             );
             // 将同一个实例注入到全局状态，避免重复创建导致的不一致
             app.manage(app_state);
