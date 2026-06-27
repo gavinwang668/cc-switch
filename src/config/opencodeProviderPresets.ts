@@ -437,6 +437,34 @@ export const opencodeProviderPresets: OpenCodeProviderPreset[] = [
     },
   },
   {
+    name: "SubRouter",
+    websiteUrl: "https://subrouter.ai",
+    apiKeyUrl: "https://subrouter.ai/register?aff=l3ri",
+    settingsConfig: {
+      npm: "@ai-sdk/openai-compatible",
+      name: "SubRouter",
+      options: {
+        baseURL: "https://subrouter.ai/v1",
+        apiKey: "",
+        setCacheKey: true,
+      },
+      models: {
+        "gpt-5.5": { name: "GPT-5.5" },
+      },
+    },
+    category: "aggregator",
+    isPartner: true,
+    partnerPromotionKey: "subrouter",
+    icon: "subrouter",
+    templateValues: {
+      apiKey: {
+        label: "API Key",
+        placeholder: "",
+        editorValue: "",
+      },
+    },
+  },
+  {
     name: "Unity2.ai",
     websiteUrl: "https://unity2.ai",
     apiKeyUrl: "https://unity2.ai/register?source=ccs",
@@ -1018,6 +1046,38 @@ export const opencodeProviderPresets: OpenCodeProviderPreset[] = [
     },
   },
 
+  {
+    name: "OpenCode Go",
+    websiteUrl: "https://opencode.ai/go",
+    apiKeyUrl: "https://opencode.ai/go?ref=2YTRG2NGTX",
+    partnerPromotionKey: "opencode_go",
+    settingsConfig: {
+      npm: "@ai-sdk/openai-compatible",
+      name: "OpenCode Go",
+      options: {
+        baseURL: "https://opencode.ai/zen/go/v1",
+        apiKey: "",
+        setCacheKey: true,
+      },
+      models: {
+        "glm-5.2": { name: "GLM 5.2" },
+        "kimi-k2.7-code": { name: "Kimi K2.7 Code" },
+        "deepseek-v4-pro": { name: "DeepSeek V4 Pro" },
+        "deepseek-v4-flash": { name: "DeepSeek V4 Flash" },
+        "mimo-v2.5-pro": { name: "MiMo V2.5 Pro" },
+      },
+    },
+    category: "third_party",
+    icon: "opencode",
+    iconColor: "#211E1E",
+    templateValues: {
+      apiKey: {
+        label: "API Key",
+        placeholder: "",
+        editorValue: "",
+      },
+    },
+  },
   {
     name: "AiHubMix",
     websiteUrl: "https://aihubmix.com",

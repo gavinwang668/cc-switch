@@ -1014,6 +1014,7 @@
       "runapi": "RunAPI offers special benefits for CC Switch users. Register via this link and contact customer support to claim ¥14 free credit.",
       "minimax_cn": "MiniMax Coding Plan Special Offer, Starter from ¥9.9",
       "minimax_en": "MiniMax Coding Plan Black Friday, Starter is now $2/mo (80% OFF!)",
+      "opencode_go": "Subscribe to OpenCode Go via this link — only $5 for your first month, plus an extra $5 in credit!",
       "dmxapi": "Claude Code exclusive model 66% OFF now!",
       "cubence": "Cubence is an official partner of CC Switch. Register using this link and enter \"CCSWITCH\" promo code during recharge to get 10% off every top-up",
       "aigocode": "AIGoCode is an official partner of CC Switch. Register using this link and get 10% bonus credit on your first top-up!",
@@ -1030,6 +1031,7 @@
       "volcengine_agentplan": "Volcengine Ark Coding Plan offers exclusive benefits for CC Switch users: subscribe via this link and new customers get 75% off for the first two months, plus an extra 5% off with the exclusive invite code 6J6FV5N2 — as low as ¥9.4/month!",
       "byteplus": "Register via this link to get 500,000 tokens of free inference quota per model.",
       "ccsub": "CCSub is a stable, affordable AI API relay — a drop-in replacement for Claude.ai & OpenAI subscriptions, with one key for all models at ~30% of direct API cost.",
+      "subrouter": "SubRouter is an AI relay aggregator that lets one key access multiple models and providers.",
       "unity2": "Unity2.ai offers exclusive benefits for CC Switch users: register via this link to get $2 in credits, plus another $10 for joining the official group — up to $12 in free credits!"
     },
     "presets": {

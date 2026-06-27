@@ -210,6 +210,21 @@ export const providerPresets: ProviderPreset[] = [
     icon: "ccsub",
   },
   {
+    name: "SubRouter",
+    websiteUrl: "https://subrouter.ai",
+    apiKeyUrl: "https://subrouter.ai/register?aff=l3ri",
+    settingsConfig: {
+      env: {
+        ANTHROPIC_BASE_URL: "https://subrouter.ai",
+        ANTHROPIC_AUTH_TOKEN: "",
+      },
+    },
+    category: "aggregator",
+    isPartner: true,
+    partnerPromotionKey: "subrouter",
+    icon: "subrouter",
+  },
+  {
     name: "Unity2.ai",
     websiteUrl: "https://unity2.ai",
     apiKeyUrl: "https://unity2.ai/register?source=ccs",
@@ -266,7 +281,9 @@ export const providerPresets: ProviderPreset[] = [
   },
   {
     name: "OpenCode Go",
-    websiteUrl: "https://opencode.ai",
+    websiteUrl: "https://opencode.ai/go",
+    apiKeyUrl: "https://opencode.ai/go?ref=2YTRG2NGTX",
+    partnerPromotionKey: "opencode_go",
     settingsConfig: {
       env: {
         ANTHROPIC_BASE_URL: "https://opencode.ai/zen/go",

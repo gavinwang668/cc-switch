@@ -985,6 +985,7 @@
       "runapi": "RunAPI 為 CC Switch 的使用者提供了特別福利，透過此連結註冊並聯繫客服可領取 ¥14 免費額度。",
       "minimax_cn": "MiniMax Coding Plan 特惠，Starter 方案 9.9 元起",
       "minimax_en": "MiniMax Coding Plan 黑五特惠，Starter 方案現僅 $2 / 月（2 折優惠！）",
+      "opencode_go": "使用此連結訂閱 OpenCode Go，首月僅需 $5，並可獲得額外的 $5 額度！",
       "dmxapi": "Claude Code 專屬模型 3.4 折優惠進行中！",
       "cubence": "Cubence 是 CC Switch 的官方合作夥伴，使用此連結註冊並在儲值時填寫「CCSWITCH」優惠碼，每次儲值均可享受 9 折優惠",
       "aigocode": "AIGoCode 是 CC Switch 的官方合作夥伴，使用此連結註冊首次儲值時可以獲得 10% 額度獎勵！",
@@ -1002,6 +1003,7 @@
       "volcengine_agentplan": "火山方舟 Coding Plan 為 CC Switch 的使用者提供了專屬福利：透過此連結訂閱方舟 Coding Plan，新客戶首兩個月享 2.5 折優惠，再用專屬邀請碼 6J6FV5N2 領取獎勵疊加 9.5 折，低至 9.4 元/月！",
       "byteplus": "透過此連結註冊即可取得每個模型 50 萬 tokens 的免費推理額度。",
       "ccsub": "CCSub 是穩定、實惠的 AI API 中轉平台，Claude Code 官方訂閱的超強平替，一個 Key 覆蓋全部模型，價格約為官方 1/3。",
+      "subrouter": "SubRouter 是中轉站聚合平台，一個 Key 可接入多個模型與供應商。",
       "unity2": "Unity2.ai 為 CC Switch 使用者提供專屬福利：透過此連結註冊可領取 $2 餘額，加入官方群再送 $10，最高可領 $12 免費額度！"
     },
     "presets": {
