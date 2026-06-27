@@ -734,12 +734,7 @@ pub async fn verify_api_key(
         .build()
         .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
 
-    let candidate_paths = [
-        "/v1/models",
-        "/models",
-        "/health",
-        "/",
-    ];
+    let candidate_paths = ["/v1/models", "/models", "/health", "/"];
 
     let mut auth_failed = false;
 

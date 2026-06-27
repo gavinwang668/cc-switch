@@ -103,8 +103,8 @@ pub struct SettingsSection {
 impl DeclConfig {
     /// 从 YAML 文件加载配置
     pub fn from_yaml_file(path: &str) -> Result<Self, String> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| format!("读取配置文件失败: {e}"))?;
+        let content =
+            std::fs::read_to_string(path).map_err(|e| format!("读取配置文件失败: {e}"))?;
         Self::from_yaml_str(&content)
     }
 
@@ -115,7 +115,15 @@ impl DeclConfig {
 
     /// 校验配置合法性
     pub fn validate(&self) -> Result<(), String> {
-        const VALID_APPS: &[&str] = &["claude", "claude-desktop", "codex", "gemini", "opencode", "openclaw", "hermes"];
+        const VALID_APPS: &[&str] = &[
+            "claude",
+            "claude-desktop",
+            "codex",
+            "gemini",
+            "opencode",
+            "openclaw",
+            "hermes",
+        ];
         const VALID_TAKEOVER_APPS: &[&str] = &["claude", "codex", "gemini"];
 
         for p in &self.providers {
@@ -138,7 +146,9 @@ impl DeclConfig {
 
         for (app, _) in &self.failover.queue {
             if !VALID_TAKEOVER_APPS.contains(&app.as_str()) {
-                return Err(format!("故障转移队列仅支持 claude/codex/gemini，不支持: {app}"));
+                return Err(format!(
+                    "故障转移队列仅支持 claude/codex/gemini，不支持: {app}"
+                ));
             }
         }
 
@@ -156,12 +166,8 @@ impl DeclConfig {
                 env.insert(k.clone(), serde_json::Value::String(v.clone()));
             }
             let settings_config = serde_json::json!({ "env": env });
-            let provider = crate::Provider::with_id(
-                p.id.clone(),
-                p.name.clone(),
-                settings_config,
-                None,
-            );
+            let provider =
+                crate::Provider::with_id(p.id.clone(), p.name.clone(), settings_config, None);
             db.save_provider(&p.app, &provider)
                 .map_err(|e| format!("保存供应商 {} 失败: {e}", p.id))?;
 

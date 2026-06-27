@@ -23,11 +23,7 @@ pub fn get_current_provider_id(db: &Database, app_type: &str) -> Result<Option<S
 }
 
 /// 切换当前供应商
-pub fn switch_provider(
-    db: &Database,
-    app_type: &str,
-    provider_id: &str,
-) -> Result<(), String> {
+pub fn switch_provider(db: &Database, app_type: &str, provider_id: &str) -> Result<(), String> {
     db.set_current_provider(app_type, provider_id)
         .map_err(|e| format!("切换供应商失败: {e}"))
 }

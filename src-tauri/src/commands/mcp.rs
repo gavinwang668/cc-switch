@@ -227,7 +227,12 @@ pub struct McpConnectionTestResult {
 }
 
 impl McpConnectionTestResult {
-    fn ok(transport: &str, duration_ms: u64, message: Option<String>, stderr_tail: Option<String>) -> Self {
+    fn ok(
+        transport: &str,
+        duration_ms: u64,
+        message: Option<String>,
+        stderr_tail: Option<String>,
+    ) -> Self {
         Self {
             success: true,
             transport: transport.to_string(),
@@ -277,11 +282,7 @@ pub async fn test_mcp_connection(
     };
 
     let spec = &server.server;
-    let transport = match spec
-        .get("type")
-        .and_then(|v| v.as_str())
-        .unwrap_or("stdio")
-    {
+    let transport = match spec.get("type").and_then(|v| v.as_str()).unwrap_or("stdio") {
         "http" => "http",
         "sse" => "sse",
         _ => "stdio",
@@ -313,7 +314,10 @@ async fn test_stdio_transport(
                 .collect()
         })
         .unwrap_or_default();
-    let cwd = spec.get("cwd").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let cwd = spec
+        .get("cwd")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
 
     // 合并环境变量
     let env_map: std::collections::HashMap<String, String> = spec
@@ -507,14 +511,22 @@ async fn test_http_transport(
                 Ok(McpConnectionTestResult::ok(
                     transport,
                     elapsed,
-                    Some(format!("HTTP 响应 {} {}", status.as_u16(), status.canonical_reason().unwrap_or(""))),
+                    Some(format!(
+                        "HTTP 响应 {} {}",
+                        status.as_u16(),
+                        status.canonical_reason().unwrap_or("")
+                    )),
                     None,
                 ))
             } else {
                 Ok(McpConnectionTestResult::err(
                     transport,
                     elapsed,
-                    format!("HTTP {} {}", status.as_u16(), status.canonical_reason().unwrap_or("")),
+                    format!(
+                        "HTTP {} {}",
+                        status.as_u16(),
+                        status.canonical_reason().unwrap_or("")
+                    ),
                 ))
             }
         }
@@ -525,4 +537,3 @@ async fn test_http_transport(
         )),
     }
 }
-

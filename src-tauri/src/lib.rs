@@ -6,7 +6,7 @@ mod claude_mcp;
 mod claude_plugin;
 mod codex_config;
 mod codex_history_migration;
-mod commands;
+pub mod commands;
 mod config;
 pub mod core;
 mod database;
@@ -29,7 +29,7 @@ mod provider;
 mod provider_defaults;
 mod proxy;
 mod services;
-mod session_manager;
+pub mod session_manager;
 mod settings;
 mod store;
 
@@ -57,11 +57,13 @@ pub use provider::{Provider, ProviderMeta};
 pub use proxy::circuit_breaker::CircuitBreakerConfig;
 pub use proxy::http_client;
 pub use proxy::{server::ProxyServer, ProxyConfig, ProxyStatus};
+pub use proxy::types::{AppProxyConfig, GlobalProxyConfig, ProviderHealth};
 pub use services::{
     skill::{migrate_skills_to_ssot, ImportSkillSelection},
-    ConfigService, EndpointLatency, McpService, PromptService, ProviderService, ProxyService,
-    SkillService, SpeedtestService,
+    ConfigService, EndpointLatency, McpService, PromptService, ProviderService, ProviderSortUpdate,
+    ProxyService, SkillService, SpeedtestService,
 };
+pub use services::usage_stats::{LogFilters, PaginatedLogs, ProviderLimitStatus, UsageSummary};
 pub use settings::{get_settings, reload_settings, update_settings, AppSettings};
 pub use store::AppState;
 use tauri_plugin_deep_link::DeepLinkExt;

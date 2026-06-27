@@ -41,19 +41,16 @@ use serde::{Deserialize, Serialize};
 pub use adapter::ProviderAdapter;
 pub use auth::{AuthInfo, AuthStrategy};
 pub use claude::{
-    claude_api_format_needs_transform, get_claude_api_format,
-    get_claude_desktop_api_format,
+    claude_api_format_needs_transform, get_claude_api_format, get_claude_desktop_api_format,
     normalize_anthropic_messages_for_provider, transform_claude_request_for_api_format,
     ClaudeAdapter,
-};
-pub use gemini::{
-    gemini_api_format_needs_transform, get_gemini_api_format, GeminiAdapter,
 };
 pub use codex::{
     apply_codex_chat_upstream_model, codex_provider_upstream_model,
     codex_provider_uses_chat_completions, is_origin_only_url, resolve_codex_chat_reasoning_config,
     should_convert_codex_responses_to_chat, CodexAdapter,
 };
+pub use gemini::{gemini_api_format_needs_transform, get_gemini_api_format, GeminiAdapter};
 
 /// 供应商类型枚举
 ///

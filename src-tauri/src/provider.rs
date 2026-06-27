@@ -468,7 +468,10 @@ pub struct ProviderMeta {
     /// - "openai_responses": OpenAI Responses API 格式，需要转换
     /// - "gemini_native": Gemini Native generateContent 格式，需要转换
     /// - "bedrock": AWS Bedrock 格式，需要转换
-    #[serde(rename = "claudeDesktopApiFormat", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "claudeDesktopApiFormat",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub claude_desktop_api_format: Option<String>,
     /// 通用认证绑定（provider_config / managed_account）
     ///
