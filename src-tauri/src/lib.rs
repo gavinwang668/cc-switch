@@ -47,6 +47,7 @@ pub use config::{
 pub use database::Database;
 pub use deeplink::{import_provider_from_deeplink, parse_deeplink_url, DeepLinkImportRequest};
 pub use error::AppError;
+pub use prompt::Prompt;
 pub use mcp::{
     import_from_claude, import_from_codex, import_from_gemini, remove_server_from_claude,
     remove_server_from_codex, remove_server_from_gemini, sync_enabled_to_claude,
@@ -62,6 +63,8 @@ pub use services::{
     skill::{migrate_skills_to_ssot, ImportSkillSelection},
     ConfigService, EndpointLatency, McpService, PromptService, ProviderService, ProviderSortUpdate,
     ProxyService, SkillService, SpeedtestService,
+    model_fetch::FetchedModel,
+    env_manager,
 };
 pub use services::usage_stats::{LogFilters, PaginatedLogs, ProviderLimitStatus, UsageSummary};
 pub use settings::{get_settings, reload_settings, update_settings, AppSettings};

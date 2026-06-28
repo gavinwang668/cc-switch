@@ -115,7 +115,7 @@ pub(crate) fn restore_skills_zip(raw: &[u8]) -> Result<(), AppError> {
         let Some(safe_name) = entry.enclosed_name() else {
             continue;
         };
-        let out_path = extracted.join(safe_name);
+        let out_path = extracted.join(&safe_name);
 
         // 路径穿越防护：确保解压路径在目标目录内
         if !out_path.starts_with(&extracted) {

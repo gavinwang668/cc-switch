@@ -1333,6 +1333,19 @@ pub(crate) fn write_gemini_live(provider: &Provider) -> Result<(), AppError> {
         config_to_write = Some(read_json_file(&settings_path)?);
     }
 
+    // Sync GEMINI_MODEL from env to settings.json "model" field.
+    // Gemini CLI reads model from both .env (GEMINI_MODEL) and settings.json (model),
+    // and the settings.json value can silently override .env when both are present.
+    // Without this sync, switching provider in CC Switch only updates .env, but
+    // an old "model" in settings.json survives the merge and sticks.
+    if let Some(model) = env_map.get("GEMINI_MODEL") {
+        if let Some(cfg) = config_to_write.as_mut() {
+            if let Some(obj) = cfg.as_object_mut() {
+                obj.insert("model".to_string(), json!(model));
+            }
+        }
+    }
+
     match auth_type {
         GeminiAuthType::GoogleOfficial => {
             // Google Official uses OAuth, no API key validation needed.

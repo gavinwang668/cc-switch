@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use serde_json::json;
-use tauri::{AppHandle, Emitter};
+use tauri::{async_runtime, AppHandle, Emitter};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
@@ -151,6 +151,14 @@ pub fn notify_db_changed(table: &str) {
     let _ = enqueue_change_signal(tx, table);
 }
 
+fn spawn_worker_task(future: impl std::future::Future<Output = ()> + Send + 'static) {
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(future);
+    } else {
+        async_runtime::spawn(future);
+    }
+}
+
 pub fn start_worker(db: Arc<crate::database::Database>, app: Option<tauri::AppHandle>) {
     if DB_CHANGE_TX.get().is_some() {
         return;
@@ -162,7 +170,7 @@ pub fn start_worker(db: Arc<crate::database::Database>, app: Option<tauri::AppHa
         return;
     }
 
-    tokio::spawn(async move {
+    spawn_worker_task(async move {
         run_worker_loop(db, rx, app).await;
     });
 }

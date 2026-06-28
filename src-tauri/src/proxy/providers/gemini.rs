@@ -199,7 +199,17 @@ impl ProviderAdapter for GeminiAdapter {
 
     fn extract_auth(&self, provider: &Provider) -> Option<AuthInfo> {
         let key = self.extract_key_raw(provider)?;
-        let strategy = self.detect_auth_type(provider);
+        let mut strategy = self.detect_auth_type(provider);
+
+        // OpenAI-compatible endpoints always use Bearer auth, not x-goog-api-key.
+        // When gemini_api_format is openai_chat / openai_responses / anthropic,
+        // the upstream expects Authorization: Bearer. Using Google (x-goog-api-key)
+        // would cause 401 on providers that don't recognize Google auth headers.
+        if matches!(strategy, AuthStrategy::Google)
+            && gemini_api_format_needs_transform(get_gemini_api_format(provider))
+        {
+            strategy = AuthStrategy::Bearer;
+        }
 
         match strategy {
             AuthStrategy::GoogleOAuth => {
@@ -211,7 +221,7 @@ impl ProviderAdapter for GeminiAdapter {
                     Some(AuthInfo::new(key, AuthStrategy::Google))
                 }
             }
-            _ => Some(AuthInfo::new(key, AuthStrategy::Google)),
+            _ => Some(AuthInfo::new(key, strategy)),
         }
     }
 

@@ -417,7 +417,7 @@ async fn handle_auto_click(app: &tauri::AppHandle, app_type: &AppType) -> Result
         }
 
         // 4) 更新托盘菜单
-        if let Ok(new_menu) = create_tray_menu(app, app_state.inner()) {
+        if let Ok(new_menu) = create_tray_menu(app, app_state.inner()).await {
             if let Some(tray) = app.tray_by_id(TRAY_ID) {
                 let _ = tray.set_menu(Some(new_menu));
             }

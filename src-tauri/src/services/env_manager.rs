@@ -1,5 +1,5 @@
 use super::env_checker::EnvConflict;
-use atomic_write::{atomic_write, AtomicWrite};
+use crate::config::atomic_write;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;

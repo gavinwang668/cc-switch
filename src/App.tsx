@@ -604,52 +604,10 @@ function App() {
     }
   };
 
-<<<<<<< HEAD
-=======
-  const notifyWindowControlError = (error: unknown) => {
-    toast.error(
-      t("notifications.windowControlFailed", {
-        defaultValue: "窗口控制失败：{{error}}",
-        error: extractErrorMessage(error),
-      }),
-    );
-  };
-
-  const handleWindowMinimize = async () => {
-    try {
-      await getCurrentWindow().minimize();
-    } catch (error) {
-      console.error("[App] Failed to minimize window", error);
-      notifyWindowControlError(error);
-    }
-  };
-
-  const handleWindowToggleMaximize = async () => {
-    try {
-      const currentWindow = getCurrentWindow();
-      await currentWindow.toggleMaximize();
-      setIsWindowMaximized(await currentWindow.isMaximized());
-    } catch (error) {
-      console.error("[App] Failed to toggle maximize", error);
-      notifyWindowControlError(error);
-    }
-  };
-
-  const handleWindowClose = async () => {
-    try {
-      await getCurrentWindow().close();
-    } catch (error) {
-      console.error("[App] Failed to close window", error);
-      notifyWindowControlError(error);
-    }
-  };
-
   const handleOpenSkillsDiscovery = () => {
     setSkillsDiscoverySource("repos");
     setCurrentView("skillsDiscovery");
   };
-
->>>>>>> upstream/main
   const renderContent = () => {
     const content = (() => {
       switch (currentView) {
@@ -1116,11 +1074,7 @@ function App() {
                     <Button
                       variant="ghost"
                       size="sm"
-<<<<<<< HEAD
-                      onClick={() => navigate("skillsDiscovery")}
-=======
                       onClick={handleOpenSkillsDiscovery}
->>>>>>> upstream/main
                       className="hover:bg-black/5 dark:hover:bg-white/5"
                     >
                       <Search className="w-4 h-4 mr-2" />

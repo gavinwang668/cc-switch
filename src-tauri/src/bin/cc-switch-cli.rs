@@ -1,8 +1,9 @@
-//! cc-switch CLI — 无头模式管理工具
+﻿//! cc-switch CLI — 无头模式管理工具
 //!
 //! 提供命令行界面管理代理服务器和供应商配置，
 //! 适用于 Linux 无头环境或需要脚本化管理的场景。
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
@@ -548,6 +549,9 @@ enum Commands {
 // ============================================================================
 
 fn main() {
+    // 安装 rustls 默认 CryptoProvider（与 GUI lib.rs setup 一致，选 ring）
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let cli = Cli::parse();
 
     // 初始化日志
@@ -589,7 +593,7 @@ fn main() {
                 api_key.as_deref(),
                 base_url.as_deref(),
                 api_format.as_deref(),
-                clear_api_format,
+                *clear_api_format,
             );
         }
         Commands::Takeover { app, enabled } => cmd_takeover(app, enabled.as_deref()),
@@ -623,15 +627,15 @@ fn main() {
         Commands::VerifyKey { base_url, api_key } => cmd_verify_key(&base_url, &api_key),
         Commands::Validate { path } => cmd_validate(&path),
         Commands::ApplyConfig { path } => cmd_apply_config(&path),
-        Commands::SortProviders { app, order } => cmd_sort_providers(app, order),
-        Commands::ImportLive { app } => cmd_import_live(app),
-        Commands::ReadLive { app } => cmd_read_live(app),
+        Commands::SortProviders { app, order } => cmd_sort_providers(app.clone(), order.clone()),
+        Commands::ImportLive { app } => cmd_import_live(app.clone()),
+        Commands::ReadLive { app } => cmd_read_live(app.clone()),
         Commands::FetchModels {
             base_url,
             api_key,
             full_url,
             models_path,
-        } => cmd_fetch_models(&base_url, &api_key, full_url, models_path),
+        } => cmd_fetch_models(base_url, api_key, *full_url, models_path.as_deref()),
         Commands::SyncLive => cmd_sync_live(),
         Commands::ProxyConfig { action, config } => cmd_proxy_config(&action, config.as_deref()),
         Commands::GlobalProxyConfig { action, config } => {
@@ -647,11 +651,11 @@ fn main() {
             cmd_pricing_source(&action, app, value.as_deref())
         }
         Commands::TakeoverStatus => cmd_takeover_status(),
-        Commands::CircuitBreakerStats { app, id } => cmd_circuit_breaker_stats(app, id),
-        Commands::ProviderHealth { app, id } => cmd_provider_health(app, id),
-        Commands::FailoverAvailable { app } => cmd_failover_available(app),
+        Commands::CircuitBreakerStats { app, id } => cmd_circuit_breaker_stats(app.clone(), id.clone()),
+        Commands::ProviderHealth { app, id } => cmd_provider_health(app.clone(), id.clone()),
+        Commands::FailoverAvailable { app } => cmd_failover_available(app.clone()),
         Commands::ConfigSnippet { action, app, snippet } => {
-            cmd_config_snippet(&action, app, snippet.as_deref())
+            cmd_config_snippet(&action, app.clone(), snippet.as_deref())
         }
         Commands::UsageByApp { days } => cmd_usage_by_app(*days),
         Commands::RequestLogs {
@@ -669,10 +673,10 @@ fn main() {
             model.as_deref(),
             *status,
         ),
-        Commands::RequestDetail { request_id } => cmd_request_detail(request_id),
-        Commands::CheckLimits { app, id } => cmd_check_limits(app, id),
-        Commands::BackupDelete { name } => cmd_backup_delete(name),
-        Commands::BackupRename { old_name, new_name } => cmd_backup_rename(old_name, new_name),
+        Commands::RequestDetail { request_id } => cmd_request_detail(request_id.clone()),
+        Commands::CheckLimits { app, id } => cmd_check_limits(app.clone(), id.clone()),
+        Commands::BackupDelete { name } => cmd_backup_delete(name.clone()),
+        Commands::BackupRename { old_name, new_name } => cmd_backup_rename(old_name.clone(), new_name.clone()),
         Commands::Endpoint { action, app, id, url } => {
             cmd_endpoint(&action, app.as_deref(), id.as_deref(), url.as_deref())
         }
@@ -682,29 +686,29 @@ fn main() {
             command,
             args,
             env,
-        } => cmd_add_mcp(id, name, command, args.as_deref(), env.as_deref()),
-        Commands::RemoveMcp { id } => cmd_remove_mcp(id),
-        Commands::ToggleMcp { id, app, enabled } => cmd_toggle_mcp(id, app, enabled),
-        Commands::TestMcp { id } => cmd_test_mcp(id),
+        } => cmd_add_mcp(id.clone(), name.clone(), command.clone(), args.as_deref(), env.as_deref()),
+        Commands::RemoveMcp { id } => cmd_remove_mcp(id.clone()),
+        Commands::ToggleMcp { id, app, enabled } => cmd_toggle_mcp(id.clone(), app.clone(), enabled.clone()),
+        Commands::TestMcp { id } => cmd_test_mcp(id.clone()),
         Commands::AddPrompt {
             app,
             id,
             name,
             content,
             file,
-        } => cmd_add_prompt(app, id, name, content.as_deref(), file.as_deref()),
-        Commands::RemovePrompt { app, id } => cmd_remove_prompt(app, id),
-        Commands::EnablePrompt { app, id, enabled } => cmd_enable_prompt(app, id, enabled),
+        } => cmd_add_prompt(app.clone(), id.clone(), name.clone(), content.as_deref(), file.as_deref()),
+        Commands::RemovePrompt { app, id } => cmd_remove_prompt(app.clone(), id.clone()),
+        Commands::EnablePrompt { app, id, enabled } => cmd_enable_prompt(app.clone(), id.clone(), enabled.clone()),
         Commands::ListSkills { app } => cmd_list_skills(app.as_deref()),
-        Commands::RemoveSkill { id, app } => cmd_remove_skill(id, app.as_deref()),
-        Commands::ToggleSkill { id, app, enabled } => cmd_toggle_skill(id, app, enabled),
+        Commands::RemoveSkill { id, app } => cmd_remove_skill(id.clone(), app.as_deref()),
+        Commands::ToggleSkill { id, app, enabled } => cmd_toggle_skill(id.clone(), app.clone(), enabled.clone()),
         Commands::CheckEnv => cmd_check_env(),
         Commands::ListSessions { app, limit } => cmd_list_sessions(app.as_deref(), *limit),
-        Commands::RemoveSession { id } => cmd_remove_session(id),
+        Commands::RemoveSession { id } => cmd_remove_session(id.clone()),
         Commands::UsageTrends { days } => cmd_usage_trends(*days),
         Commands::ProviderStats { days } => cmd_provider_stats(*days),
         Commands::ModelStats { days } => cmd_model_stats(*days),
-        Commands::StreamCheck { app, id } => cmd_stream_check(app, id),
+        Commands::StreamCheck { app, id } => cmd_stream_check(app.clone(), id.clone()),
         Commands::StreamCheckAll => cmd_stream_check_all(),
         Commands::Help => cmd_help(),
     }
@@ -1205,6 +1209,9 @@ fn cmd_add_provider(
         sort_index: None,
         notes: None,
         meta,
+        icon: None,
+        icon_color: None,
+        in_failover_queue: false,
     };
 
     match db.save_provider(app, &provider) {
@@ -1531,6 +1538,9 @@ fn cmd_update_provider(
         sort_index: provider.sort_index,
         notes: provider.notes,
         meta: Some(meta),
+        icon: provider.icon.clone(),
+        icon_color: provider.icon_color.clone(),
+        in_failover_queue: provider.in_failover_queue,
     };
     match db.save_provider(app, &updated) {
         Ok(_) => println!("供应商 '{id}' 已更新"),
@@ -2409,7 +2419,7 @@ fn cmd_sort_providers(app: String, order: String) {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::store::AppState::new(db);
+    let app_state = cc_switch_lib::AppState::new(db);
     let app_type = match cc_switch_lib::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
@@ -2449,7 +2459,7 @@ fn cmd_import_live(app: String) {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::store::AppState::new(db);
+    let app_state = cc_switch_lib::AppState::new(db);
     let app_type = match cc_switch_lib::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
@@ -2502,7 +2512,7 @@ fn cmd_fetch_models(
 ) {
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async {
-        match cc_switch_lib::commands::model_fetch::fetch_models_for_config(
+        match cc_switch_lib::fetch_models_for_config(
             base_url.to_string(),
             api_key.to_string(),
             Some(full_url),
@@ -2514,7 +2524,7 @@ fn cmd_fetch_models(
             Ok(models) => {
                 println!("可用模型 ({}):", models.len());
                 for m in &models {
-                    println!("  {}", m);
+                    println!("  {:?}", m);
                 }
             }
             Err(e) => {
@@ -2534,7 +2544,7 @@ fn cmd_sync_live() {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::store::AppState::new(db);
+    let app_state = cc_switch_lib::AppState::new(db);
     match cc_switch_lib::ProviderService::sync_current_to_live(&app_state) {
         Ok(_) => println!("已将数据库供应商同步到 Live 配置"),
         Err(e) => {
@@ -3006,7 +3016,7 @@ fn cmd_config_snippet(action: &str, app: String, snippet: Option<&str>) {
                     std::process::exit(1);
                 }
             };
-            match db.set_config_snippet(&app, Some(&snippet_str)) {
+            match db.set_config_snippet(&app, Some(snippet_str)) {
                 Ok(_) => println!("{app} 通用配置片段已更新"),
                 Err(e) => {
                     eprintln!("设置失败: {e}");
@@ -3022,7 +3032,7 @@ fn cmd_config_snippet(action: &str, app: String, snippet: Option<&str>) {
                     std::process::exit(1);
                 }
             };
-            match cc_switch_lib::ProviderService::read_live_settings(app_type) {
+            match cc_switch_lib::ProviderService::read_live_settings(app_type.clone()) {
                 Ok(settings) => {
                     match cc_switch_lib::ProviderService::extract_common_config_snippet_from_settings(
                         app_type,
@@ -3262,7 +3272,7 @@ fn cmd_endpoint(action: &str, app: Option<&str>, id: Option<&str>, url: Option<&
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::store::AppState::new(db);
+    let app_state = cc_switch_lib::AppState::new(db);
     let app_type = match cc_switch_lib::AppType::from_str(app) {
         Ok(t) => t,
         Err(e) => {
@@ -3298,7 +3308,7 @@ fn cmd_endpoint(action: &str, app: Option<&str>, id: Option<&str>, url: Option<&
                     std::process::exit(1);
                 }
             };
-            match cc_switch_lib::ProviderService::add_custom_endpoint(&app_state, app_type, id, url)
+            match cc_switch_lib::ProviderService::add_custom_endpoint(&app_state, app_type, id, url.to_string())
             {
                 Ok(_) => println!("端点已添加: {url}"),
                 Err(e) => {
@@ -3316,7 +3326,7 @@ fn cmd_endpoint(action: &str, app: Option<&str>, id: Option<&str>, url: Option<&
                 }
             };
             match cc_switch_lib::ProviderService::remove_custom_endpoint(
-                &app_state, app_type, id, url,
+                &app_state, app_type, id, url.to_string(),
             ) {
                 Ok(_) => println!("端点已移除: {url}"),
                 Err(e) => {
@@ -3351,7 +3361,7 @@ fn cmd_add_mcp(
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::store::AppState::new(db);
+    let app_state = cc_switch_lib::AppState::new(db);
 
     let args_vec: Vec<String> = match args {
         Some(a) => serde_json::from_str(a).unwrap_or_else(|_| vec![]),
@@ -3377,7 +3387,6 @@ fn cmd_add_mcp(
             codex: false,
             gemini: false,
             opencode: false,
-            openclaw: false,
             hermes: false,
         },
         description: None,
@@ -3407,7 +3416,7 @@ fn cmd_remove_mcp(id: String) {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::store::AppState::new(db);
+    let app_state = cc_switch_lib::AppState::new(db);
     match cc_switch_lib::McpService::delete_server(&app_state, &id) {
         Ok(_) => println!("MCP 服务器 '{id}' 已删除"),
         Err(e) => {
@@ -3438,7 +3447,7 @@ fn cmd_toggle_mcp(id: String, app: String, enabled: String) {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::store::AppState::new(db);
+    let app_state = cc_switch_lib::AppState::new(db);
     let app_type = match cc_switch_lib::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
@@ -3559,7 +3568,7 @@ fn cmd_add_prompt(
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::store::AppState::new(db);
+    let app_state = cc_switch_lib::AppState::new(db);
     let app_type = match cc_switch_lib::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
@@ -3568,7 +3577,7 @@ fn cmd_add_prompt(
         }
     };
 
-    let prompt = cc_switch_lib::prompt::Prompt {
+    let prompt = cc_switch_lib::Prompt {
         id: id.clone(),
         name: name.clone(),
         content: prompt_content,
@@ -3580,7 +3589,7 @@ fn cmd_add_prompt(
 
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async move {
-        match cc_switch_lib::PromptService::upsert_prompt(&app_state, app_type, &id, &prompt) {
+        match cc_switch_lib::PromptService::upsert_prompt(&app_state, app_type, &id, prompt) {
             Ok(_) => println!("Prompt '{id}' ({name}) 已添加/更新到 {app}"),
             Err(e) => {
                 eprintln!("添加 Prompt 失败: {e}");
@@ -3603,7 +3612,7 @@ fn cmd_remove_prompt(app: String, id: String) {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::store::AppState::new(db);
+    let app_state = cc_switch_lib::AppState::new(db);
     let app_type = match cc_switch_lib::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
@@ -3641,7 +3650,7 @@ fn cmd_enable_prompt(app: String, id: String, enabled: String) {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::store::AppState::new(db);
+    let app_state = cc_switch_lib::AppState::new(db);
     let app_type = match cc_switch_lib::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
@@ -3669,7 +3678,7 @@ fn cmd_enable_prompt(app: String, id: String, enabled: String) {
                     }
                 };
                 prompt.enabled = false;
-                match cc_switch_lib::PromptService::upsert_prompt(&app_state, app_type, &id, &prompt) {
+                match cc_switch_lib::PromptService::upsert_prompt(&app_state, app_type, &id, prompt) {
                     Ok(_) => println!("Prompt '{id}' 已禁用 ({app})"),
                     Err(e) => {
                         eprintln!("禁用失败: {e}");
@@ -3779,7 +3788,7 @@ fn cmd_toggle_skill(id: String, app: String, enabled: String) {
             std::process::exit(1);
         }
     };
-    match cc_switch_lib::SkillService::toggle_app(&db, &id, app_type, enable) {
+    match cc_switch_lib::SkillService::toggle_app(&db, &id, &app_type, enable) {
         Ok(_) => println!("Skill '{id}' 在 {app} 中已{}", if enable { "启用" } else { "禁用" }),
         Err(e) => {
             eprintln!("切换失败: {e}");
@@ -3793,7 +3802,7 @@ fn cmd_check_env() {
     let all_apps = ["claude", "codex", "gemini", "opencode", "openclaw", "hermes"];
     let mut found_any = false;
     for app in &all_apps {
-        match cc_switch_lib::commands::env::check_env_conflicts(app.to_string()) {
+        match cc_switch_lib::check_env_conflicts(app.to_string()) {
             Ok(conflicts) => {
                 if !conflicts.is_empty() {
                     found_any = true;
@@ -4148,7 +4157,7 @@ fn format_tokens(count: u64) -> String {
     } else if count >= 1_000_000 {
         format!("{:.2}M", count as f64 / 1_000_000.0)
     } else if count >= 1_000 {
-        format!("{:.1f}K", count as f64 / 1_000.0)
+        format!("{:.1}K", count as f64 / 1_000.0)
     } else {
         count.to_string()
     }

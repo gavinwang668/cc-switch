@@ -792,9 +792,28 @@ impl ProviderAdapter for ClaudeAdapter {
                 // ANTHROPIC_AUTH_TOKEN → Authorization: Bearer
                 // ANTHROPIC_API_KEY    → x-api-key
                 // 其他来源（apiKey 直填等）默认走 x-api-key（Anthropic 官方协议）。
-                let strategy = self
+                let mut strategy = self
                     .infer_anthropic_auth_strategy(provider)
-                    .unwrap_or(AuthStrategy::Anthropic);
+                    .unwrap_or_else(|| {
+                        match self.get_api_format(provider) {
+                            "openai_chat" | "openai_responses" => AuthStrategy::ClaudeAuth,
+                            _ => AuthStrategy::Anthropic,
+                        }
+                    });
+
+                // OpenAI-compatible endpoints always use Bearer auth, not
+                // x-api-key. Convert even when the user explicitly configured
+                // ANTHROPIC_API_KEY, because providers like NVIDIA reject
+                // x-api-key headers and require Authorization: Bearer.
+                if matches!(strategy, AuthStrategy::Anthropic)
+                    && matches!(
+                        self.get_api_format(provider),
+                        "openai_chat" | "openai_responses"
+                    )
+                {
+                    strategy = AuthStrategy::ClaudeAuth;
+                }
+
                 Some(AuthInfo::new(key, strategy))
             }
         }
