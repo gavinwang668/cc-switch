@@ -13,9 +13,10 @@ doctest = false
 
 [features]
 default = []
+tauri = ["dep:tauri"]
 test-hooks = []
 
-# 本 crate 严禁依赖 tauri / tauri-plugin-* / webkit2gtk。
+# Tauri 为 optional 依赖：CLI 不启用，GUI (cc-switch-app) 通过 feature 启用。
 # 所有 Tauri 相关代码迁到 cc-switch-tauri-commands。
 [dependencies]
 serde_json = { version = "1.0", features = ["preserve_order"] }
@@ -67,6 +68,7 @@ brotli = "7"
 zstd = "0.13"
 arboard = "3.6"
 ipnet = "2"
+tauri = { version = "2.8.2", features = ["tray-icon", "protocol-asset", "image-png"], optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

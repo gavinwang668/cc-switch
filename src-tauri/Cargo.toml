@@ -24,7 +24,7 @@ test-hooks = []
 tauri-build = { version = "2.4.0", features = [] }
 
 [dependencies]
-cc-switch-core = { path = "../crates/cc-switch-core" }
+cc-switch-core = { path = "../crates/cc-switch-core", features = ["tauri"] }
 cc-switch-tauri-commands = { path = "../crates/cc-switch-tauri-commands" }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 serde = { version = "1.0", features = ["derive"] }
