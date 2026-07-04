@@ -2436,7 +2436,10 @@ fn cmd_apply_config(path: &str) {
             std::process::exit(1);
         }
     };
-    match config.apply(&db) {
+    // CLI 模式：proxy_service = None，代理字段会被跳过并提示
+    let ctx = cc_switch_core::core::decl_config::ApplyContext::new(&db);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    match rt.block_on(config.apply(&ctx)) {
         Ok(summary) => {
             println!("✓ 配置已应用:");
             println!("{summary}");

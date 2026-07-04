@@ -83,8 +83,6 @@ sha2 = "0.10"
 hmac = "0.12"
 json5 = "0.4"
 json-five = "0.3.1"
-clap = { version = "4.5", features = ["derive"] }
-env_logger = "0.11"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -98,10 +96,6 @@ keyring = { version = "3.6", features = ["windows-native"] }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2"
-
-[[bin]]
-name = "cc-switch-cli"
-path = "src/bin/cc-switch-cli.rs"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { version = "2.0.1", features = ["v2_16"] }

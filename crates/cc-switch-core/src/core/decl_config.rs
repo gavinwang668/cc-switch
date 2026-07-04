@@ -6,6 +6,24 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// 声明式配置应用上下文。
+///
+/// CLI 传 `proxy_service: None`，apply 时对代理字段写日志"需手动设置"；
+/// GUI 传完整 ctx，apply 时真正应用。
+pub struct ApplyContext<'a> {
+    pub db: &'a crate::database::Database,
+    pub proxy_service: Option<&'a crate::services::ProxyService>,
+}
+
+impl<'a> ApplyContext<'a> {
+    pub fn new(db: &'a crate::database::Database) -> Self {
+        Self {
+            db,
+            proxy_service: None,
+        }
+    }
+}
+
 /// 声明式配置文件根结构
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -143,8 +161,12 @@ impl DeclConfig {
         Ok(())
     }
 
-    /// 将声明式配置应用到数据库和设置
-    pub fn apply(&self, db: &crate::database::Database) -> Result<String, String> {
+    /// 将声明式配置应用到数据库和代理服务。
+    ///
+    /// - `ctx.proxy_service = None`（CLI 模式）：跳过代理字段应用，记录日志
+    /// - `ctx.proxy_service = Some(_)`（GUI 模式）：完整应用代理字段
+    pub async fn apply(&self, ctx: &ApplyContext<'_>) -> Result<String, String> {
+        let db = ctx.db;
         let mut actions = Vec::new();
 
         // 1. 应用供应商配置
@@ -177,7 +199,6 @@ impl DeclConfig {
 
         // 3. 应用故障转移队列
         for (app, ids) in &self.failover.queue {
-            // 清空现有队列（通过移除再添加实现）
             if let Ok(existing) = db.get_failover_queue(app) {
                 for item in existing {
                     let _ = db.remove_from_failover_queue(app, &item.provider_id);
@@ -200,7 +221,29 @@ impl DeclConfig {
             actions.push("自动故障转移已全局开启".to_string());
         }
 
-        // 5. 应用设备级设置
+        // 5. 应用代理接管状态（依赖 proxy_service）
+        for (app, enabled) in &self.proxy.takeover {
+            match ctx.proxy_service {
+                Some(svc) => {
+                    let takeover_app = crate::app_config::AppType::from_str(app)
+                        .map_err(|_| format!("无效的应用类型: {app}"))?;
+                    svc.set_takeover_for_app(takeover_app, *enabled)
+                        .await
+                        .map_err(|e| format!("设置接管 {app}={} 失败: {e}", enabled))?;
+                    actions.push(format!("代理接管 {app}={}", enabled));
+                }
+                None => {
+                    log::warn!(
+                        "代理接管 {app}={enabled} 需 proxy_service，当前 CLI 模式未提供，请手动执行 takeover 命令"
+                    );
+                    actions.push(format!(
+                        "（跳过）代理接管 {app}={enabled} —— CLI 模式需手动执行 `cc-switch-cli takeover {app} on`"
+                    ));
+                }
+            }
+        }
+
+        // 6. 应用设备级设置
         let mut settings = crate::settings::get_settings();
         if let Some(lang) = &self.settings.language {
             settings.language = Some(lang.clone());
