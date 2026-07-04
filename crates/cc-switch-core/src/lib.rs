@@ -18,6 +18,7 @@ pub mod claude_mcp;
 pub mod claude_plugin;
 pub mod codex_config;
 pub mod codex_history_migration;
+pub mod codex_oauth;
 pub mod config;
 pub mod copilot_auth;
 pub mod core;

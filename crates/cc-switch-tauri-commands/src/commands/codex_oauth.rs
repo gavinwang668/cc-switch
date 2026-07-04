@@ -12,8 +12,8 @@ use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
 
-/// Codex OAuth 认证状态
-pub struct CodexOAuthState(pub Arc<RwLock<CodexOAuthManager>>);
+/// Codex OAuth 认证状态（类型别名，实际定义在 cc-switch-core）
+pub use cc_switch_core::codex_oauth::CodexOAuthState;
 
 /// 查询 Codex OAuth (ChatGPT Plus/Pro) 订阅额度
 ///
