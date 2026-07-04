@@ -9,6 +9,8 @@
 //!
 //! 当 `feature = "tauri"` 未启用时（CLI 模式），Tauri 类型退化为空桩。
 
+#![allow(clippy::module_inception)]
+
 // 跨 feature 的 Tauri 类型别名
 #[cfg(feature = "tauri")]
 pub use tauri::AppHandle as TauriAppHandle;
@@ -16,8 +18,6 @@ pub use tauri::AppHandle as TauriAppHandle;
 /// CLI 模式：空 AppHandle 桩
 #[derive(Clone, Debug, Default)]
 pub struct TauriAppHandle;
-
-#![allow(clippy::module_inception)]
 
 pub mod app_config;
 pub mod claude_desktop_config;

@@ -117,7 +117,7 @@ fn emit_auto_sync_status_updated(
 
 async fn run_auto_sync_upload(
     db: &crate::database::Database,
-    app: Option<&AppHandle>,
+    app: Option<&crate::TauriAppHandle>,
 ) -> Result<(), AppError> {
     let mut settings = settings::get_s3_sync_settings();
     if !should_run_auto_sync(settings.as_ref()) {

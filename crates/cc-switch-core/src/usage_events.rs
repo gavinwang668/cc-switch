@@ -23,15 +23,16 @@ pub const EVENT_USAGE_LOG_RECORDED: &str = "usage-log-recorded";
 /// 防抖窗口：合并 200ms 内的多次通知。
 const DEBOUNCE_WINDOW: Duration = Duration::from_millis(200);
 
+#[cfg(feature = "tauri")]
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
 /// 防抖标记：true 表示已有调度任务在等待 emit，后续通知合并到该任务。
 static EMIT_SCHEDULED: AtomicBool = AtomicBool::new(false);
 
-/// 在应用 setup 阶段调用一次，注入 AppHandle。
+/// 在应用 setup 阶段调用一次，注入 AppHandle（仅 GUI 模式）。
 ///
-/// 重复调用是无害的（OnceLock 仅首次写入生效），但应用启动期只该被
-/// `lib.rs::run` 调一次。
+/// CLI 模式下此函数为 no-op。
+#[cfg(feature = "tauri")]
 pub fn init(handle: AppHandle) {
     if APP_HANDLE.set(handle).is_err() {
         log::debug!("usage_events::init 重复调用，已忽略");
@@ -40,30 +41,35 @@ pub fn init(handle: AppHandle) {
     }
 }
 
+#[cfg(not(feature = "tauri"))]
+pub fn init(_handle: crate::TauriAppHandle) {
+    log::info!("[usage-event] CLI 模式，事件推送已禁用");
+}
+
 /// 通知前端有新的使用日志写入。
 ///
-/// 调用方**不**需要持有 AppHandle，可以从任意线程/任意写入路径调用。
-/// 内部 200ms 防抖合并，绝不阻塞调用线程。
+/// CLI 模式下为 no-op。
 pub fn notify_log_recorded() {
-    // AppHandle 未注入（典型出现在单元测试或 setup 之前）：直接放弃。
-    let Some(handle) = APP_HANDLE.get() else {
-        return;
-    };
-
-    // 已有调度任务：本次通知被合并到既有任务里，无需再起线程。
-    if EMIT_SCHEDULED.swap(true, Ordering::AcqRel) {
-        return;
-    }
-
-    let handle = handle.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(DEBOUNCE_WINDOW);
-        // 必须先清标志再 emit：万一 emit 期间又有新通知进来，
-        // 下一轮防抖窗口会重新调度，不会丢失。
-        EMIT_SCHEDULED.store(false, Ordering::Release);
-
-        if let Err(e) = handle.emit(EVENT_USAGE_LOG_RECORDED, ()) {
-            log::warn!("emit {EVENT_USAGE_LOG_RECORDED} 失败: {e}");
+    #[cfg(feature = "tauri")]
+    {
+        let Some(handle) = APP_HANDLE.get() else {
+            return;
+        };
+        if EMIT_SCHEDULED.swap(true, Ordering::AcqRel) {
+            return;
         }
-    });
+        let handle = handle.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(DEBOUNCE_WINDOW);
+            EMIT_SCHEDULED.store(false, Ordering::Release);
+            if let Err(e) = handle.emit(EVENT_USAGE_LOG_RECORDED, ()) {
+                log::warn!("emit {EVENT_USAGE_LOG_RECORDED} 失败: {e}");
+            }
+        });
+    }
+    #[cfg(not(feature = "tauri"))]
+    {
+        // CLI 模式：无前端，不推送事件
+        let _ = EMIT_SCHEDULED.load(Ordering::Relaxed);
+    }
 }
