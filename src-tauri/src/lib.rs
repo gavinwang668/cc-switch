@@ -32,7 +32,7 @@ pub use cc_switch_core::usage_script;
 // Tauri-specific 模块（保留在 src-tauri）
 mod app_store;
 mod auto_launch;
-pub mod commands;
+pub use cc_switch_tauri_commands::commands;
 mod lightweight;
 #[cfg(target_os = "linux")]
 mod linux_fix;
