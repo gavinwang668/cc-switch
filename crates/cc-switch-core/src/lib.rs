@@ -13,11 +13,11 @@
 
 // 跨 feature 的 Tauri 类型别名
 #[cfg(feature = "tauri")]
-pub use tauri::AppHandle as crate::TauriAppHandle;
+pub use tauri::AppHandle as TauriAppHandle;
 #[cfg(not(feature = "tauri"))]
 /// CLI 模式：空 AppHandle 桩
 #[derive(Clone, Debug, Default)]
-pub struct crate::TauriAppHandle;
+pub struct TauriAppHandle;
 
 pub mod app_config;
 pub mod claude_desktop_config;

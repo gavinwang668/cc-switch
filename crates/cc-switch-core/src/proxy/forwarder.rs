@@ -37,7 +37,7 @@ use std::sync::Arc;
 #[cfg(feature = "tauri")]
 use tauri::Manager;
 #[cfg(feature = "tauri")]
-use crate::TauriAppHandle as crate::TauriAppHandle;
+use crate::TauriAppHandle;
 use tokio::sync::RwLock;
 
 const PROXY_AUTH_PLACEHOLDER: &str = "PROXY_MANAGED";
