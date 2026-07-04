@@ -1,4 +1,4 @@
-﻿//! cc-switch CLI — 无头模式管理工具
+//! cc-switch CLI — 无头模式管理工具
 //!
 //! 提供命令行界面管理代理服务器和供应商配置，
 //! 适用于 Linux 无头环境或需要脚本化管理的场景。
@@ -75,11 +75,14 @@ enum Commands {
         /// Base URL
         #[arg(long)]
         base_url: Option<String>,
-        /// API 格式（仅 claude/codex/gemini/claude-desktop）
-        /// claude: anthropic / openai_chat / openai_responses
-        /// codex: openai_responses / openai_chat
-        /// gemini: gemini_native / openai_chat / openai_responses / anthropic
-        /// claude-desktop: anthropic / openai_chat / openai_responses / gemini_native / bedrock
+        /// API 格式（按应用支持情况选择）
+        /// - claude: anthropic / openai_chat / openai_responses
+        /// - claude-desktop: anthropic / openai_chat / openai_responses / gemini_native / bedrock
+        /// - codex: openai_responses / openai_chat
+        /// - gemini: gemini_native / openai_chat / openai_responses / anthropic
+        /// - opencode: openai_chat / openai_responses
+        /// - openclaw: openai_chat / openai_responses / anthropic
+        /// - hermes: openai_chat / openai_responses / anthropic
         #[arg(long)]
         api_format: Option<String>,
     },
@@ -107,11 +110,14 @@ enum Commands {
         api_key: Option<String>,
         #[arg(long)]
         base_url: Option<String>,
-        /// API 格式（仅 claude/codex/gemini/claude-desktop）
-        /// claude: anthropic / openai_chat / openai_responses
-        /// codex: openai_responses / openai_chat
-        /// gemini: gemini_native / openai_chat / openai_responses / anthropic
-        /// claude-desktop: anthropic / openai_chat / openai_responses / gemini_native / bedrock
+        /// API 格式（按应用支持情况选择）
+        /// - claude: anthropic / openai_chat / openai_responses
+        /// - claude-desktop: anthropic / openai_chat / openai_responses / gemini_native / bedrock
+        /// - codex: openai_responses / openai_chat
+        /// - gemini: gemini_native / openai_chat / openai_responses / anthropic
+        /// - opencode: openai_chat / openai_responses
+        /// - openclaw: openai_chat / openai_responses / anthropic
+        /// - hermes: openai_chat / openai_responses / anthropic
         #[arg(long)]
         api_format: Option<String>,
         /// 清除 API 格式设置
@@ -508,11 +514,6 @@ enum Commands {
         #[arg(long, default_value = "20")]
         limit: u32,
     },
-    /// 删除会话
-    RemoveSession {
-        /// 会话 ID
-        id: String,
-    },
     /// 查看用量趋势
     UsageTrends {
         /// 天数
@@ -531,15 +532,6 @@ enum Commands {
         #[arg(long, default_value = "7")]
         days: u32,
     },
-    /// 流式检查供应商
-    StreamCheck {
-        /// 应用类型
-        app: String,
-        /// 供应商 ID
-        id: String,
-    },
-    /// 流式检查全部供应商
-    StreamCheckAll,
     /// 列出所有可用命令
     Help,
 }
@@ -573,7 +565,14 @@ fn main() {
             base_url,
             api_format,
         } => {
-            cmd_add_provider(app, id, name, api_key.as_deref(), base_url.as_deref(), api_format.as_deref());
+            cmd_add_provider(
+                app,
+                id,
+                name,
+                api_key.as_deref(),
+                base_url.as_deref(),
+                api_format.as_deref(),
+            );
         }
         Commands::RemoveProvider { app, id } => cmd_remove_provider(app, id),
         Commands::SwitchProvider { app, id } => cmd_switch_provider(app, id),
@@ -641,9 +640,11 @@ fn main() {
         Commands::GlobalProxyConfig { action, config } => {
             cmd_global_proxy_config(&action, config.as_deref())
         }
-        Commands::AppProxyConfig { action, app, config } => {
-            cmd_app_proxy_config(&action, app, config.as_deref())
-        }
+        Commands::AppProxyConfig {
+            action,
+            app,
+            config,
+        } => cmd_app_proxy_config(&action, app, config.as_deref()),
         Commands::CostMultiplier { action, app, value } => {
             cmd_cost_multiplier(&action, app, value.as_deref())
         }
@@ -651,12 +652,16 @@ fn main() {
             cmd_pricing_source(&action, app, value.as_deref())
         }
         Commands::TakeoverStatus => cmd_takeover_status(),
-        Commands::CircuitBreakerStats { app, id } => cmd_circuit_breaker_stats(app.clone(), id.clone()),
+        Commands::CircuitBreakerStats { app, id } => {
+            cmd_circuit_breaker_stats(app.clone(), id.clone())
+        }
         Commands::ProviderHealth { app, id } => cmd_provider_health(app.clone(), id.clone()),
         Commands::FailoverAvailable { app } => cmd_failover_available(app.clone()),
-        Commands::ConfigSnippet { action, app, snippet } => {
-            cmd_config_snippet(&action, app.clone(), snippet.as_deref())
-        }
+        Commands::ConfigSnippet {
+            action,
+            app,
+            snippet,
+        } => cmd_config_snippet(&action, app.clone(), snippet.as_deref()),
         Commands::UsageByApp { days } => cmd_usage_by_app(*days),
         Commands::RequestLogs {
             page,
@@ -676,19 +681,32 @@ fn main() {
         Commands::RequestDetail { request_id } => cmd_request_detail(request_id.clone()),
         Commands::CheckLimits { app, id } => cmd_check_limits(app.clone(), id.clone()),
         Commands::BackupDelete { name } => cmd_backup_delete(name.clone()),
-        Commands::BackupRename { old_name, new_name } => cmd_backup_rename(old_name.clone(), new_name.clone()),
-        Commands::Endpoint { action, app, id, url } => {
-            cmd_endpoint(&action, app.as_deref(), id.as_deref(), url.as_deref())
+        Commands::BackupRename { old_name, new_name } => {
+            cmd_backup_rename(old_name.clone(), new_name.clone())
         }
+        Commands::Endpoint {
+            action,
+            app,
+            id,
+            url,
+        } => cmd_endpoint(&action, app.as_deref(), id.as_deref(), url.as_deref()),
         Commands::AddMcp {
             id,
             name,
             command,
             args,
             env,
-        } => cmd_add_mcp(id.clone(), name.clone(), command.clone(), args.as_deref(), env.as_deref()),
+        } => cmd_add_mcp(
+            id.clone(),
+            name.clone(),
+            command.clone(),
+            args.as_deref(),
+            env.as_deref(),
+        ),
         Commands::RemoveMcp { id } => cmd_remove_mcp(id.clone()),
-        Commands::ToggleMcp { id, app, enabled } => cmd_toggle_mcp(id.clone(), app.clone(), enabled.clone()),
+        Commands::ToggleMcp { id, app, enabled } => {
+            cmd_toggle_mcp(id.clone(), app.clone(), enabled.clone())
+        }
         Commands::TestMcp { id } => cmd_test_mcp(id.clone()),
         Commands::AddPrompt {
             app,
@@ -696,20 +714,27 @@ fn main() {
             name,
             content,
             file,
-        } => cmd_add_prompt(app.clone(), id.clone(), name.clone(), content.as_deref(), file.as_deref()),
+        } => cmd_add_prompt(
+            app.clone(),
+            id.clone(),
+            name.clone(),
+            content.as_deref(),
+            file.as_deref(),
+        ),
         Commands::RemovePrompt { app, id } => cmd_remove_prompt(app.clone(), id.clone()),
-        Commands::EnablePrompt { app, id, enabled } => cmd_enable_prompt(app.clone(), id.clone(), enabled.clone()),
+        Commands::EnablePrompt { app, id, enabled } => {
+            cmd_enable_prompt(app.clone(), id.clone(), enabled.clone())
+        }
         Commands::ListSkills { app } => cmd_list_skills(app.as_deref()),
         Commands::RemoveSkill { id, app } => cmd_remove_skill(id.clone(), app.as_deref()),
-        Commands::ToggleSkill { id, app, enabled } => cmd_toggle_skill(id.clone(), app.clone(), enabled.clone()),
+        Commands::ToggleSkill { id, app, enabled } => {
+            cmd_toggle_skill(id.clone(), app.clone(), enabled.clone())
+        }
         Commands::CheckEnv => cmd_check_env(),
         Commands::ListSessions { app, limit } => cmd_list_sessions(app.as_deref(), *limit),
-        Commands::RemoveSession { id } => cmd_remove_session(id.clone()),
         Commands::UsageTrends { days } => cmd_usage_trends(*days),
         Commands::ProviderStats { days } => cmd_provider_stats(*days),
         Commands::ModelStats { days } => cmd_model_stats(*days),
-        Commands::StreamCheck { app, id } => cmd_stream_check(app.clone(), id.clone()),
-        Commands::StreamCheckAll => cmd_stream_check_all(),
         Commands::Help => cmd_help(),
     }
 }
@@ -1136,6 +1161,10 @@ fn cmd_list_providers(app: Option<&str>) {
             let base_url = provider
                 .settings_config
                 .pointer("/env/ANTHROPIC_BASE_URL")
+                .or_else(|| provider.settings_config.pointer("/env/OPENAI_BASE_URL"))
+                .or_else(|| provider.settings_config.pointer("/env/GEMINI_BASE_URL"))
+                .or_else(|| provider.settings_config.pointer("/env/OPENCLAW_BASE_URL"))
+                .or_else(|| provider.settings_config.pointer("/env/HERMES_BASE_URL"))
                 .or_else(|| provider.settings_config.pointer("/env/BASE_URL"))
                 .or_else(|| provider.settings_config.pointer("/baseUrl"))
                 .and_then(|v| v.as_str())
@@ -1175,16 +1204,29 @@ fn cmd_add_provider(
         }
     };
 
+    // 按 app 类型选择正确的 env 字段名
+    let (key_field, url_field) = match app {
+        "claude" | "claude-desktop" => ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"),
+        "codex" | "opencode" => ("OPENAI_API_KEY", "OPENAI_BASE_URL"),
+        "gemini" => ("GEMINI_API_KEY", "GEMINI_BASE_URL"),
+        "openclaw" => ("OPENCLAW_API_KEY", "OPENCLAW_BASE_URL"),
+        "hermes" => ("HERMES_API_KEY", "HERMES_BASE_URL"),
+        _ => {
+            eprintln!("错误: 不支持的应用类型: {app}");
+            std::process::exit(1);
+        }
+    };
+
     let mut env = serde_json::Map::new();
     if let Some(key) = api_key {
         env.insert(
-            "ANTHROPIC_API_KEY".to_string(),
+            key_field.to_string(),
             serde_json::Value::String(key.to_string()),
         );
     }
     if let Some(url) = base_url {
         env.insert(
-            "ANTHROPIC_BASE_URL".to_string(),
+            url_field.to_string(),
             serde_json::Value::String(url.to_string()),
         );
     }
@@ -1485,6 +1527,19 @@ fn cmd_update_provider(
         }
     };
 
+    // 按 app 类型选择正确的 env 字段名
+    let (key_field, url_field) = match app {
+        "claude" | "claude-desktop" => ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"),
+        "codex" | "opencode" => ("OPENAI_API_KEY", "OPENAI_BASE_URL"),
+        "gemini" => ("GEMINI_API_KEY", "GEMINI_BASE_URL"),
+        "openclaw" => ("OPENCLAW_API_KEY", "OPENCLAW_BASE_URL"),
+        "hermes" => ("HERMES_API_KEY", "HERMES_BASE_URL"),
+        _ => {
+            eprintln!("错误: 不支持的应用类型: {app}");
+            std::process::exit(1);
+        }
+    };
+
     let mut settings_config = provider.settings_config.clone();
     if let Some(env) = settings_config
         .get_mut("env")
@@ -1492,13 +1547,13 @@ fn cmd_update_provider(
     {
         if let Some(key) = api_key {
             env.insert(
-                "ANTHROPIC_API_KEY".to_string(),
+                key_field.to_string(),
                 serde_json::Value::String(key.to_string()),
             );
         }
         if let Some(url) = base_url {
             env.insert(
-                "ANTHROPIC_BASE_URL".to_string(),
+                url_field.to_string(),
                 serde_json::Value::String(url.to_string()),
             );
         }
@@ -1506,13 +1561,13 @@ fn cmd_update_provider(
         let mut env = serde_json::Map::new();
         if let Some(key) = api_key {
             env.insert(
-                "ANTHROPIC_API_KEY".to_string(),
+                key_field.to_string(),
                 serde_json::Value::String(key.to_string()),
             );
         }
         if let Some(url) = base_url {
             env.insert(
-                "ANTHROPIC_BASE_URL".to_string(),
+                url_field.to_string(),
                 serde_json::Value::String(url.to_string()),
             );
         }
@@ -2230,10 +2285,7 @@ fn cmd_usage_summary(days: u32) {
             println!("用量统计 (最近 {days} 天):");
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             println!("  总请求数:       {}", summary.total_requests);
-            println!(
-                "  总成本:         ${}",
-                summary.total_cost
-            );
+            println!("  总成本:         ${}", summary.total_cost);
             println!(
                 "  输入 Token:     {}",
                 format_tokens(summary.total_input_tokens)
@@ -2254,14 +2306,8 @@ fn cmd_usage_summary(days: u32) {
                 "  实际总 Token:   {}",
                 format_tokens(summary.real_total_tokens)
             );
-            println!(
-                "  成功率:         {:.1}%",
-                summary.success_rate * 100.0
-            );
-            println!(
-                "  缓存命中率:     {:.1}%",
-                summary.cache_hit_rate * 100.0
-            );
+            println!("  成功率:         {:.1}%", summary.success_rate * 100.0);
+            println!("  缓存命中率:     {:.1}%", summary.cache_hit_rate * 100.0);
 
             if summary.total_requests == 0 {
                 println!("\n提示：暂无请求记录。请确保代理服务器正在运行以记录用量数据。");
@@ -2504,12 +2550,7 @@ fn cmd_read_live(app: String) {
 }
 
 /// fetch-models: 获取供应商支持的模型列表
-fn cmd_fetch_models(
-    base_url: &str,
-    api_key: &str,
-    full_url: bool,
-    models_path: Option<&str>,
-) {
+fn cmd_fetch_models(base_url: &str, api_key: &str, full_url: bool, models_path: Option<&str>) {
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async {
         match cc_switch_lib::fetch_models_for_config(
@@ -2638,14 +2679,14 @@ fn cmd_global_proxy_config(action: &str, config: Option<&str>) {
                         std::process::exit(1);
                     }
                 };
-                let cfg: cc_switch_lib::GlobalProxyConfig =
-                    match serde_json::from_str(config_json) {
-                        Ok(c) => c,
-                        Err(e) => {
-                            eprintln!("解析配置失败: {e}");
-                            std::process::exit(1);
-                        }
-                    };
+                let cfg: cc_switch_lib::GlobalProxyConfig = match serde_json::from_str(config_json)
+                {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("解析配置失败: {e}");
+                        std::process::exit(1);
+                    }
+                };
                 match db.update_global_proxy_config(cfg).await {
                     Ok(_) => println!("全局代理配置已更新"),
                     Err(e) => {
@@ -2696,14 +2737,13 @@ fn cmd_app_proxy_config(action: &str, app: &str, config: Option<&str>) {
                         std::process::exit(1);
                     }
                 };
-                let cfg: cc_switch_lib::AppProxyConfig =
-                    match serde_json::from_str(config_json) {
-                        Ok(c) => c,
-                        Err(e) => {
-                            eprintln!("解析配置失败: {e}");
-                            std::process::exit(1);
-                        }
-                    };
+                let cfg: cc_switch_lib::AppProxyConfig = match serde_json::from_str(config_json) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("解析配置失败: {e}");
+                        std::process::exit(1);
+                    }
+                };
                 let app_type = cfg.app_type.clone();
                 match db.update_proxy_config_for_app(cfg).await {
                     Ok(_) => println!("{app_type} 代理配置已更新"),
@@ -2883,7 +2923,11 @@ fn cmd_circuit_breaker_stats(app: String, id: String) {
                 println!("熔断器/供应商状态 ({app}/{id}):");
                 println!(
                     "  健康状态:     {}",
-                    if health.is_healthy { "健康" } else { "不健康（可能已熔断）" }
+                    if health.is_healthy {
+                        "健康"
+                    } else {
+                        "不健康（可能已熔断）"
+                    }
                 );
                 println!("  连续失败次数: {}", health.consecutive_failures);
                 println!(
@@ -2930,7 +2974,11 @@ fn cmd_provider_health(app: String, id: String) {
                 println!("  应用类型:     {}", health.app_type);
                 println!(
                     "  健康状态:     {}",
-                    if health.is_healthy { "健康" } else { "不健康" }
+                    if health.is_healthy {
+                        "健康"
+                    } else {
+                        "不健康"
+                    }
                 );
                 println!("  连续失败次数: {}", health.consecutive_failures);
                 println!(
@@ -3082,8 +3130,14 @@ fn cmd_usage_by_app(days: u32) {
                 println!("\n── {} ──", s.app_type);
                 println!("  总请求数:       {}", s.summary.total_requests);
                 println!("  总成本:         ${}", s.summary.total_cost);
-                println!("  输入 Token:     {}", format_tokens(s.summary.total_input_tokens));
-                println!("  输出 Token:     {}", format_tokens(s.summary.total_output_tokens));
+                println!(
+                    "  输入 Token:     {}",
+                    format_tokens(s.summary.total_input_tokens)
+                );
+                println!(
+                    "  输出 Token:     {}",
+                    format_tokens(s.summary.total_output_tokens)
+                );
                 println!(
                     "  缓存读取 Token: {}",
                     format_tokens(s.summary.total_cache_read_tokens)
@@ -3127,7 +3181,10 @@ fn cmd_request_logs(
 
     match db.get_request_logs(&filters, page, page_size) {
         Ok(result) => {
-            println!("请求日志 (第 {page} 页, 每页 {page_size} 条, 共 {} 条):", result.total);
+            println!(
+                "请求日志 (第 {page} 页, 每页 {page_size} 条, 共 {} 条):",
+                result.total
+            );
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             if result.data.is_empty() {
                 println!("  (无记录)");
@@ -3209,7 +3266,11 @@ fn cmd_check_limits(app: String, id: String) {
                     println!("  月限额:     ${limit}");
                     println!(
                         "  月超限:     {}",
-                        if status.monthly_exceeded { "是" } else { "否" }
+                        if status.monthly_exceeded {
+                            "是"
+                        } else {
+                            "否"
+                        }
                     );
                 }
                 None => println!("  月限额:     (未设置)"),
@@ -3308,8 +3369,12 @@ fn cmd_endpoint(action: &str, app: Option<&str>, id: Option<&str>, url: Option<&
                     std::process::exit(1);
                 }
             };
-            match cc_switch_lib::ProviderService::add_custom_endpoint(&app_state, app_type, id, url.to_string())
-            {
+            match cc_switch_lib::ProviderService::add_custom_endpoint(
+                &app_state,
+                app_type,
+                id,
+                url.to_string(),
+            ) {
                 Ok(_) => println!("端点已添加: {url}"),
                 Err(e) => {
                     eprintln!("添加端点失败: {e}");
@@ -3326,7 +3391,10 @@ fn cmd_endpoint(action: &str, app: Option<&str>, id: Option<&str>, url: Option<&
                 }
             };
             match cc_switch_lib::ProviderService::remove_custom_endpoint(
-                &app_state, app_type, id, url.to_string(),
+                &app_state,
+                app_type,
+                id,
+                url.to_string(),
             ) {
                 Ok(_) => println!("端点已移除: {url}"),
                 Err(e) => {
@@ -3347,13 +3415,7 @@ fn cmd_endpoint(action: &str, app: Option<&str>, id: Option<&str>, url: Option<&
 // ============================================================================
 
 /// add-mcp: 添加/更新 MCP 服务器
-fn cmd_add_mcp(
-    id: String,
-    name: String,
-    command: String,
-    args: Option<&str>,
-    env: Option<&str>,
-) {
+fn cmd_add_mcp(id: String, name: String, command: String, args: Option<&str>, env: Option<&str>) {
     let db = match init_db() {
         Ok(d) => d,
         Err(e) => {
@@ -3458,7 +3520,10 @@ fn cmd_toggle_mcp(id: String, app: String, enabled: String) {
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async move {
         match cc_switch_lib::McpService::toggle_app(&app_state, &id, app_type, enable) {
-            Ok(_) => println!("MCP '{id}' 在 {app} 中已{}", if enable { "启用" } else { "禁用" }),
+            Ok(_) => println!(
+                "MCP '{id}' 在 {app} 中已{}",
+                if enable { "启用" } else { "禁用" }
+            ),
             Err(e) => {
                 eprintln!("切换失败: {e}");
                 std::process::exit(1);
@@ -3678,7 +3743,8 @@ fn cmd_enable_prompt(app: String, id: String, enabled: String) {
                     }
                 };
                 prompt.enabled = false;
-                match cc_switch_lib::PromptService::upsert_prompt(&app_state, app_type, &id, prompt) {
+                match cc_switch_lib::PromptService::upsert_prompt(&app_state, app_type, &id, prompt)
+                {
                     Ok(_) => println!("Prompt '{id}' 已禁用 ({app})"),
                     Err(e) => {
                         eprintln!("禁用失败: {e}");
@@ -3723,10 +3789,22 @@ fn cmd_list_skills(app: Option<&str>) {
             println!("{:<3} {:<25} {:<20} {}", "#", "名称", "ID", "应用");
             for (i, s) in filtered.iter().enumerate() {
                 let mut apps = Vec::new();
-                if s.apps.claude { apps.push("claude"); }
-                if s.apps.codex { apps.push("codex"); }
-                if s.apps.gemini { apps.push("gemini"); }
-                println!("{:<3} {:<25} {:<20} {}", i + 1, s.name, s.id, apps.join(","));
+                if s.apps.claude {
+                    apps.push("claude");
+                }
+                if s.apps.codex {
+                    apps.push("codex");
+                }
+                if s.apps.gemini {
+                    apps.push("gemini");
+                }
+                println!(
+                    "{:<3} {:<25} {:<20} {}",
+                    i + 1,
+                    s.name,
+                    s.id,
+                    apps.join(",")
+                );
             }
         }
         Err(e) => {
@@ -3789,7 +3867,10 @@ fn cmd_toggle_skill(id: String, app: String, enabled: String) {
         }
     };
     match cc_switch_lib::SkillService::toggle_app(&db, &id, &app_type, enable) {
-        Ok(_) => println!("Skill '{id}' 在 {app} 中已{}", if enable { "启用" } else { "禁用" }),
+        Ok(_) => println!(
+            "Skill '{id}' 在 {app} 中已{}",
+            if enable { "启用" } else { "禁用" }
+        ),
         Err(e) => {
             eprintln!("切换失败: {e}");
             std::process::exit(1);
@@ -3799,7 +3880,9 @@ fn cmd_toggle_skill(id: String, app: String, enabled: String) {
 
 /// check-env: 检查环境变量冲突
 fn cmd_check_env() {
-    let all_apps = ["claude", "codex", "gemini", "opencode", "openclaw", "hermes"];
+    let all_apps = [
+        "claude", "codex", "gemini", "opencode", "openclaw", "hermes",
+    ];
     let mut found_any = false;
     for app in &all_apps {
         match cc_switch_lib::check_env_conflicts(app.to_string()) {
@@ -3827,17 +3910,16 @@ fn cmd_check_env() {
 fn cmd_list_sessions(app: Option<&str>, limit: u32) {
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async {
-        let sessions = match tokio::task::spawn_blocking(|| {
-            cc_switch_lib::session_manager::scan_sessions()
-        })
-        .await
-        {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("扫描会话失败: {e}");
-                std::process::exit(1);
-            }
-        };
+        let sessions =
+            match tokio::task::spawn_blocking(|| cc_switch_lib::session_manager::scan_sessions())
+                .await
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("扫描会话失败: {e}");
+                    std::process::exit(1);
+                }
+            };
 
         let filtered: Vec<_> = match app {
             Some(a) => sessions
@@ -3851,24 +3933,24 @@ fn cmd_list_sessions(app: Option<&str>, limit: u32) {
             println!("(无会话)");
             return;
         }
-        println!("{:<3} {:<30} {:<25} {:<20}", "#", "会话ID", "供应商", "最后活跃");
+        println!(
+            "{:<3} {:<30} {:<25} {:<20}",
+            "#", "会话ID", "供应商", "最后活跃"
+        );
         for (i, s) in limited.iter().enumerate() {
             let sid = &s.session_id[..s.session_id.len().min(30)];
             let pid = &s.provider_id[..s.provider_id.len().min(25)];
             let active = s
                 .last_active_at
-                .map(|t| chrono::DateTime::from_timestamp(t, 0).map(|d| d.to_rfc3339()).unwrap_or_else(|| t.to_string()))
+                .map(|t| {
+                    chrono::DateTime::from_timestamp(t, 0)
+                        .map(|d| d.to_rfc3339())
+                        .unwrap_or_else(|| t.to_string())
+                })
                 .unwrap_or_else(|| "?".to_string());
             println!("{:<3} {:<30} {:<25} {:<20}", i + 1, sid, pid, active);
         }
     });
-}
-
-/// remove-session: 删除会话
-fn cmd_remove_session(id: String) {
-    eprintln!("删除会话需要提供 provider_id 和 source_path，当前 CLI 命令暂不支持完整参数。");
-    eprintln!("请使用 GUI 删除会话，或手动删除会话文件。");
-    eprintln!("会话 ID: {id}");
 }
 
 /// usage-trends: 查看用量趋势
@@ -3891,7 +3973,10 @@ fn cmd_usage_trends(days: u32) {
             }
             println!("用量趋势 (最近 {days} 天):");
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            println!("{:<12} {:<10} {:<12} {:<12} {:<10}", "日期", "请求数", "成本($)", "输入Token", "输出Token");
+            println!(
+                "{:<12} {:<10} {:<12} {:<12} {:<10}",
+                "日期", "请求数", "成本($)", "输入Token", "输出Token"
+            );
             for t in &trends {
                 println!(
                     "{:<12} {:<10} {:<12} {:<12} {:<10}",
@@ -3930,7 +4015,10 @@ fn cmd_provider_stats(days: u32) {
             }
             println!("供应商统计 (最近 {days} 天):");
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            println!("{:<25} {:<10} {:<12} {:<10}", "供应商", "请求数", "成本($)", "成功率");
+            println!(
+                "{:<25} {:<10} {:<12} {:<10}",
+                "供应商", "请求数", "成本($)", "成功率"
+            );
             for s in &stats {
                 println!(
                     "{:<25} {:<10} {:<12} {:<10.1}%",
@@ -3968,14 +4056,14 @@ fn cmd_model_stats(days: u32) {
             }
             println!("模型统计 (最近 {days} 天):");
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            println!("{:<30} {:<10} {:<12} {:<15}", "模型", "请求数", "成本($)", "平均成本/请求");
+            println!(
+                "{:<30} {:<10} {:<12} {:<15}",
+                "模型", "请求数", "成本($)", "平均成本/请求"
+            );
             for s in &stats {
                 println!(
                     "{:<30} {:<10} {:<12} {:<15}",
-                    s.model,
-                    s.request_count,
-                    s.total_cost,
-                    s.avg_cost_per_request
+                    s.model, s.request_count, s.total_cost, s.avg_cost_per_request
                 );
             }
         }
@@ -3984,23 +4072,6 @@ fn cmd_model_stats(days: u32) {
             std::process::exit(1);
         }
     }
-}
-
-/// stream-check: 流式检查供应商
-fn cmd_stream_check(app: String, id: String) {
-    if let Err(e) = validated_app(&app) {
-        eprintln!("错误: {e}");
-        std::process::exit(1);
-    }
-    eprintln!("流式检查需要代理服务器运行中且 CopilotAuthState 初始化，当前 CLI 环境不支持。");
-    eprintln!("请使用 speedtest 或 verify-key 命令进行基本连通性测试。");
-    eprintln!("应用: {app}, 供应商: {id}");
-}
-
-/// stream-check-all: 流式检查全部供应商
-fn cmd_stream_check_all() {
-    eprintln!("流式检查需要代理服务器运行中且 CopilotAuthState 初始化，当前 CLI 环境不支持。");
-    eprintln!("请使用 speedtest 或 verify-key 命令进行基本连通性测试。");
 }
 
 /// help: 列出所有命令
@@ -4097,12 +4168,9 @@ fn cmd_help() {
     println!("    toggle-skill <ID> <APP> <on|off>   启用/禁用 Skill");
     println!("    check-env                          检查环境变量冲突");
     println!("    list-sessions [APP] [--limit N]    列出会话");
-    println!("    remove-session <ID>                删除会话（需 GUI）");
     println!("    usage-trends [--days N]            查看用量趋势");
     println!("    provider-stats [--days N]          查看供应商统计");
     println!("    model-stats [--days N]             查看模型统计");
-    println!("    stream-check <APP> <ID>            流式检查（需代理运行）");
-    println!("    stream-check-all                   流式检查全部（需代理运行）");
     println!();
     println!("环境变量:");
     println!("  CC_SWITCH_LISTEN    代理监听地址 (默认 127.0.0.1)");
