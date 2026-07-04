@@ -164,7 +164,7 @@ fn spawn_worker_task(future: impl std::future::Future<Output = ()> + Send + 'sta
     }
 }
 
-pub fn start_worker(db: Arc<crate::database::Database>, app: Option<TauriAppHandle>) {
+pub fn start_worker(db: Arc<crate::database::Database>, app: Option<crate::TauriAppHandle>) {
     if DB_CHANGE_TX.get().is_some() {
         return;
     }
@@ -183,7 +183,7 @@ pub fn start_worker(db: Arc<crate::database::Database>, app: Option<TauriAppHand
 async fn run_worker_loop(
     db: Arc<crate::database::Database>,
     mut rx: Receiver<String>,
-    app: Option<TauriAppHandle>,
+    app: Option<crate::TauriAppHandle>,
 ) {
     while let Some(first_table) = rx.recv().await {
         let started_at = Instant::now();

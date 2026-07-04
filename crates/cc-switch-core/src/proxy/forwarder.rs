@@ -37,7 +37,7 @@ use std::sync::Arc;
 #[cfg(feature = "tauri")]
 use tauri::Manager;
 #[cfg(feature = "tauri")]
-use TauriAppHandle as TauriAppHandle;
+use crate::TauriAppHandle as crate::TauriAppHandle;
 use tokio::sync::RwLock;
 
 const PROXY_AUTH_PLACEHOLDER: &str = "PROXY_MANAGED";
@@ -109,7 +109,7 @@ pub struct RequestForwarder {
     /// 故障转移切换管理器
     failover_manager: Arc<FailoverSwitchManager>,
     /// AppHandle，用于发射事件和更新托盘
-    app_handle: Option<TauriAppHandle>,
+    app_handle: Option<crate::TauriAppHandle>,
     /// 请求开始时的"当前供应商 ID"（用于判断是否需要同步 UI/托盘）
     current_provider_id_at_start: String,
     /// 代理会话 ID（用于 Gemini Native shadow replay）
@@ -189,7 +189,7 @@ impl RequestForwarder {
         gemini_shadow: Arc<GeminiShadowStore>,
         codex_chat_history: Arc<CodexChatHistoryStore>,
         failover_manager: Arc<FailoverSwitchManager>,
-        app_handle: Option<TauriAppHandle>,
+        app_handle: Option<crate::TauriAppHandle>,
         current_provider_id_at_start: String,
         session_id: String,
         session_client_provided: bool,

@@ -48,7 +48,7 @@ pub struct ProxyState {
     pub codex_chat_history: Arc<CodexChatHistoryStore>,
     /// AppHandle，用于发射事件和更新托盘菜单（仅 GUI 模式）
     #[cfg(feature = "tauri")]
-    pub app_handle: Option<TauriAppHandle>,
+    pub app_handle: Option<crate::TauriAppHandle>,
     /// 故障转移切换管理器
     pub failover_manager: Arc<FailoverSwitchManager>,
     /// 共享的 shutdown 信号发送端，允许 HTTP handler（如 POST /stop）触发服务器停止
@@ -67,7 +67,7 @@ impl ProxyServer {
     pub fn new(
         config: ProxyConfig,
         db: Arc<Database>,
-        app_handle: Option<TauriAppHandle>,
+        app_handle: Option<crate::TauriAppHandle>,
     ) -> Self {
         // 创建共享的 ProviderRouter（熔断器状态将跨所有请求保持）
         let provider_router = Arc::new(ProviderRouter::new(db.clone()));
