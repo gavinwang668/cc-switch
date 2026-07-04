@@ -29,10 +29,7 @@ impl PendingSwitchGuard {
     ) -> Result<Self, AppError> {
         let mut pending = pending_switches.lock().await;
         if pending.contains(&switch_key) {
-            return Err(AppError::Message(format!(
-                "切换已在进行中: {}",
-                switch_key
-            )));
+            return Err(AppError::Message(format!("切换已在进行中: {}", switch_key)));
         }
         pending.insert(switch_key.clone());
         Ok(Self {

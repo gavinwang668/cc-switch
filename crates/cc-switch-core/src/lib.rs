@@ -12,4 +12,41 @@
 
 #![allow(clippy::module_inception)]
 
-// 模块在后续逐步迁移到此 crate。
+pub mod app_config;
+pub mod claude_desktop_config;
+pub mod claude_mcp;
+pub mod claude_plugin;
+pub mod codex_config;
+pub mod codex_history_migration;
+pub mod config;
+pub mod core;
+pub mod database;
+pub mod deeplink;
+pub mod error;
+pub mod event_callback;
+pub mod gemini_config;
+pub mod gemini_mcp;
+pub mod hermes_config;
+pub mod init_status;
+pub mod mcp;
+pub mod openclaw_config;
+pub mod opencode_config;
+pub mod prompt;
+pub mod prompt_files;
+pub mod provider;
+pub mod provider_defaults;
+pub mod proxy;
+pub mod services;
+pub mod session_manager;
+pub mod settings;
+pub mod store;
+pub mod usage_events;
+pub mod usage_script;
+
+// 常用类型 re-export
+pub use app_config::{AppType, InstalledSkill, McpApps, McpServer, MultiAppConfig, SkillApps};
+pub use database::Database;
+pub use error::AppError;
+pub use provider::{Provider, ProviderMeta};
+pub use settings::{get_settings, reload_settings, update_settings, AppSettings};
+pub use store::AppState;

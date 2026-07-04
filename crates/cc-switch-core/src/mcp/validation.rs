@@ -153,7 +153,12 @@ mod tests {
 
     #[test]
     fn validate_blocks_unsafe_schemes() {
-        for bad in ["file:///etc/passwd", "ftp://example.com", "gopher://x", "data:text/plain,hi"] {
+        for bad in [
+            "file:///etc/passwd",
+            "ftp://example.com",
+            "gopher://x",
+            "data:text/plain,hi",
+        ] {
             let spec = serde_json::json!({"type":"http","url": bad});
             assert!(validate_server_spec(&spec).is_err(), "should reject {bad}");
         }

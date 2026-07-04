@@ -409,7 +409,10 @@ async fn handle_auto_click(app: &tauri::AppHandle, app_type: &AppType) -> Result
             .set_proxy_flags_sync(app_type_str, true, true)?;
 
         // 3.1) 立即切到队列 P1（热切换：不写 Live，仅更新 DB/settings/备份）
-        if let Err(e) = proxy_service.switch_proxy_target(app_type_str, &p1_provider_id).await {
+        if let Err(e) = proxy_service
+            .switch_proxy_target(app_type_str, &p1_provider_id)
+            .await
+        {
             log::error!("[Tray] Auto 模式切换到队列 P1 失败: {e}");
             return Err(AppError::Message(format!(
                 "Auto 模式切换到队列 P1 失败: {e}"
@@ -555,7 +558,10 @@ pub async fn create_tray_menu(
 
             // Check if this app is under proxy takeover (for disabling official providers)
             let is_app_taken_over = is_proxy_running
-                && (app_state.db.get_live_backup(app_type_str).await
+                && (app_state
+                    .db
+                    .get_live_backup(app_type_str)
+                    .await
                     .ok()
                     .flatten()
                     .is_some()

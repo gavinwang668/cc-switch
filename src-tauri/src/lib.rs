@@ -1,41 +1,43 @@
-mod app_config;
+// 从 cc-switch-core 迁移的模块
+pub use cc_switch_core::app_config;
+pub use cc_switch_core::claude_desktop_config;
+pub use cc_switch_core::claude_mcp;
+pub use cc_switch_core::claude_plugin;
+pub use cc_switch_core::codex_config;
+pub use cc_switch_core::codex_history_migration;
+pub use cc_switch_core::config;
+pub use cc_switch_core::core;
+pub use cc_switch_core::database;
+pub use cc_switch_core::deeplink;
+pub use cc_switch_core::error;
+pub use cc_switch_core::gemini_config;
+pub use cc_switch_core::gemini_mcp;
+pub use cc_switch_core::hermes_config;
+pub use cc_switch_core::init_status;
+pub use cc_switch_core::mcp;
+pub use cc_switch_core::openclaw_config;
+pub use cc_switch_core::opencode_config;
+pub use cc_switch_core::prompt;
+pub use cc_switch_core::prompt_files;
+pub use cc_switch_core::provider;
+pub use cc_switch_core::provider_defaults;
+pub use cc_switch_core::proxy;
+pub use cc_switch_core::services;
+pub use cc_switch_core::session_manager;
+pub use cc_switch_core::settings;
+pub use cc_switch_core::store;
+pub use cc_switch_core::usage_events;
+pub use cc_switch_core::usage_script;
+
+// Tauri-specific 模块（保留在 src-tauri）
 mod app_store;
 mod auto_launch;
-mod claude_desktop_config;
-mod claude_mcp;
-mod claude_plugin;
-mod codex_config;
-mod codex_history_migration;
 pub mod commands;
-mod config;
-pub mod core;
-mod database;
-mod deeplink;
-mod error;
-mod gemini_config;
-mod gemini_mcp;
-pub mod hermes_config;
-mod init_status;
 mod lightweight;
 #[cfg(target_os = "linux")]
 mod linux_fix;
-mod mcp;
-mod openclaw_config;
-mod opencode_config;
 mod panic_hook;
-mod prompt;
-mod prompt_files;
-mod provider;
-mod provider_defaults;
-mod proxy;
-mod services;
-pub mod session_manager;
-mod settings;
-mod store;
-
 mod tray;
-mod usage_events;
-mod usage_script;
 
 pub use app_config::{AppType, InstalledSkill, McpApps, McpServer, MultiAppConfig, SkillApps};
 pub use codex_config::{get_codex_auth_path, get_codex_config_path, write_codex_live_atomic};
@@ -47,26 +49,26 @@ pub use config::{
 pub use database::Database;
 pub use deeplink::{import_provider_from_deeplink, parse_deeplink_url, DeepLinkImportRequest};
 pub use error::AppError;
-pub use prompt::Prompt;
 pub use mcp::{
     import_from_claude, import_from_codex, import_from_gemini, remove_server_from_claude,
     remove_server_from_codex, remove_server_from_gemini, sync_enabled_to_claude,
     sync_enabled_to_codex, sync_enabled_to_gemini, sync_single_server_to_claude,
     sync_single_server_to_codex, sync_single_server_to_gemini,
 };
+pub use prompt::Prompt;
 pub use provider::{Provider, ProviderMeta};
 pub use proxy::circuit_breaker::CircuitBreakerConfig;
 pub use proxy::http_client;
-pub use proxy::{server::ProxyServer, ProxyConfig, ProxyStatus};
 pub use proxy::types::{AppProxyConfig, GlobalProxyConfig, ProviderHealth};
+pub use proxy::{server::ProxyServer, ProxyConfig, ProxyStatus};
+pub use services::usage_stats::{LogFilters, PaginatedLogs, ProviderLimitStatus, UsageSummary};
 pub use services::{
+    env_manager,
+    model_fetch::FetchedModel,
     skill::{migrate_skills_to_ssot, ImportSkillSelection},
     ConfigService, EndpointLatency, McpService, PromptService, ProviderService, ProviderSortUpdate,
     ProxyService, SkillService, SpeedtestService,
-    model_fetch::FetchedModel,
-    env_manager,
 };
-pub use services::usage_stats::{LogFilters, PaginatedLogs, ProviderLimitStatus, UsageSummary};
 pub use settings::{get_settings, reload_settings, update_settings, AppSettings};
 pub use store::AppState;
 use tauri_plugin_deep_link::DeepLinkExt;

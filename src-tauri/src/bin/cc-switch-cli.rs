@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
 
-use cc_switch_lib::core::{bootstrap, provider_manager};
-use cc_switch_lib::Database;
+use cc_switch_core::core::{bootstrap, provider_manager};
+use cc_switch_core::Database;
 
 // ============================================================================
 // CLI 定义
@@ -765,7 +765,7 @@ fn pid_file_path() -> std::path::PathBuf {
 
 /// 获取配置目录 (~/.cc-switch)
 fn crate_config_dir() -> std::path::PathBuf {
-    cc_switch_lib::get_app_config_dir()
+    cc_switch_core::get_app_config_dir()
 }
 
 /// 写入 PID 文件
@@ -962,7 +962,7 @@ fn cmd_daemon() {
 }
 
 /// 设置信号处理器并等待停止信号
-async fn setup_signal_handlers(proxy_service: &cc_switch_lib::ProxyService, is_daemon: bool) {
+async fn setup_signal_handlers(proxy_service: &cc_switch_core::ProxyService, is_daemon: bool) {
     #[cfg(unix)]
     {
         use tokio::signal::unix::{signal, SignalKind};
@@ -983,7 +983,7 @@ async fn setup_signal_handlers(proxy_service: &cc_switch_lib::ProxyService, is_d
                 }
                 _ = sighup.recv() => {
                     log::info!("收到 SIGHUP 信号，正在重载配置...");
-                    match cc_switch_lib::reload_settings() {
+                    match cc_switch_core::reload_settings() {
                         Ok(()) => log::info!("✓ 配置已重载"),
                         Err(e) => log::error!("✗ 配置重载失败: {e}"),
                     }
@@ -1236,12 +1236,12 @@ fn cmd_add_provider(
     });
 
     let meta = api_format.map(|fmt| {
-        let mut meta = cc_switch_lib::ProviderMeta::default();
+        let mut meta = cc_switch_core::ProviderMeta::default();
         meta.api_format = Some(fmt.to_string());
         meta
     });
 
-    let provider = cc_switch_lib::Provider {
+    let provider = cc_switch_core::Provider {
         id: id.to_string(),
         name: name.to_string(),
         settings_config,
@@ -1378,8 +1378,8 @@ fn cmd_settings(key: Option<&str>, value: Option<&str>) {
     match (key, value) {
         (None, None) => {
             // 列出所有设置
-            let settings = cc_switch_lib::AppSettings::default();
-            let current = cc_switch_lib::get_settings();
+            let settings = cc_switch_core::AppSettings::default();
+            let current = cc_switch_core::get_settings();
             let merged = merge_settings_for_display(&current, &settings);
             println!("当前设备级设置 (~/.cc-switch/settings.json):");
             println!(
@@ -1389,7 +1389,7 @@ fn cmd_settings(key: Option<&str>, value: Option<&str>) {
         }
         (Some(k), None) => {
             // 查看指定设置
-            let settings = cc_switch_lib::get_settings();
+            let settings = cc_switch_core::get_settings();
             let json = serde_json::to_value(&settings).unwrap_or_default();
             match json.get(&k) {
                 Some(v) => println!(
@@ -1405,17 +1405,17 @@ fn cmd_settings(key: Option<&str>, value: Option<&str>) {
         }
         (Some(k), Some(v)) => {
             // 修改设置
-            let mut settings = cc_switch_lib::get_settings();
+            let mut settings = cc_switch_core::get_settings();
             let mut json = serde_json::to_value(&settings).unwrap_or_default();
             let parsed_value: serde_json::Value = serde_json::from_str(v)
                 .unwrap_or_else(|_| serde_json::Value::String(v.to_string()));
             if let Some(obj) = json.as_object_mut() {
                 obj.insert(k.to_string(), parsed_value);
             }
-            if let Ok(updated) = serde_json::from_value::<cc_switch_lib::AppSettings>(json) {
+            if let Ok(updated) = serde_json::from_value::<cc_switch_core::AppSettings>(json) {
                 settings = updated;
             }
-            match cc_switch_lib::update_settings(settings) {
+            match cc_switch_core::update_settings(settings) {
                 Ok(_) => println!("设置 '{}' 已更新", k),
                 Err(e) => {
                     eprintln!("保存设置失败: {e}");
@@ -1583,7 +1583,7 @@ fn cmd_update_provider(
     }
 
     let new_name = name.map(|s| s.to_string()).unwrap_or(provider.name);
-    let updated = cc_switch_lib::Provider {
+    let updated = cc_switch_core::Provider {
         id: id.to_string(),
         name: new_name,
         settings_config,
@@ -1615,7 +1615,7 @@ fn cmd_takeover(app: &str, enabled: Option<&str>) {
             std::process::exit(1);
         }
     };
-    let proxy_service = cc_switch_lib::ProxyService::new(db);
+    let proxy_service = cc_switch_core::ProxyService::new(db);
 
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async move {
@@ -1686,7 +1686,7 @@ fn cmd_switch_proxy(app: &str, id: &str) {
             std::process::exit(1);
         }
     };
-    let proxy_service = cc_switch_lib::ProxyService::new(db);
+    let proxy_service = cc_switch_core::ProxyService::new(db);
 
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async move {
@@ -1841,7 +1841,7 @@ fn cmd_circuit_breaker(action: &str, app: Option<&str>, id: Option<&str>, config
             std::process::exit(1);
         }
     };
-    let proxy_service = cc_switch_lib::ProxyService::new(db.clone());
+    let proxy_service = cc_switch_core::ProxyService::new(db.clone());
 
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async move {
@@ -1875,7 +1875,7 @@ fn cmd_circuit_breaker(action: &str, app: Option<&str>, id: Option<&str>, config
                         std::process::exit(1);
                     }
                 };
-                let cfg: cc_switch_lib::CircuitBreakerConfig =
+                let cfg: cc_switch_core::CircuitBreakerConfig =
                     match serde_json::from_str(config_json) {
                         Ok(c) => c,
                         Err(e) => {
@@ -2028,7 +2028,7 @@ fn cmd_global_proxy(action: &str, url: Option<&str>) {
             };
             match db.set_global_proxy_url(Some(url)) {
                 Ok(_) => {
-                    if let Err(e) = cc_switch_lib::http_client::init(Some(url)) {
+                    if let Err(e) = cc_switch_core::http_client::init(Some(url)) {
                         eprintln!("HTTP 客户端初始化失败: {e}");
                     }
                     println!("全局出站代理已设置为: {url}");
@@ -2041,7 +2041,7 @@ fn cmd_global_proxy(action: &str, url: Option<&str>) {
         }
         "clear" => match db.set_global_proxy_url(None) {
             Ok(_) => {
-                let _ = cc_switch_lib::http_client::init(None);
+                let _ = cc_switch_core::http_client::init(None);
                 println!("全局出站代理已清除");
             }
             Err(e) => {
@@ -2211,7 +2211,7 @@ fn cmd_backup_create() {
             std::process::exit(1);
         }
     };
-    let backup_dir = cc_switch_lib::get_app_config_dir().join("backups");
+    let backup_dir = cc_switch_core::get_app_config_dir().join("backups");
     let _ = std::fs::create_dir_all(&backup_dir);
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     let backup_path = backup_dir.join(format!("cc-switch-backup-{timestamp}.sql"));
@@ -2226,7 +2226,7 @@ fn cmd_backup_create() {
 
 /// backup-list: 列出备份
 fn cmd_backup_list() {
-    match cc_switch_lib::Database::list_backups() {
+    match cc_switch_core::Database::list_backups() {
         Ok(backups) => {
             if backups.is_empty() {
                 println!("(无备份)");
@@ -2324,7 +2324,7 @@ fn cmd_usage_summary(days: u32) {
 fn cmd_speedtest(url: &str, timeout: u64) {
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async {
-        match cc_switch_lib::SpeedtestService::test_endpoints(vec![url.to_string()], Some(timeout))
+        match cc_switch_core::SpeedtestService::test_endpoints(vec![url.to_string()], Some(timeout))
             .await
         {
             Ok(results) => {
@@ -2390,7 +2390,7 @@ fn cmd_verify_key(base_url: &str, api_key: &str) {
 
 /// validate: 校验声明式配置文件
 fn cmd_validate(path: &str) {
-    match cc_switch_lib::core::decl_config::DeclConfig::from_yaml_file(path) {
+    match cc_switch_core::core::decl_config::DeclConfig::from_yaml_file(path) {
         Ok(config) => {
             if let Err(e) = config.validate() {
                 eprintln!("配置校验失败: {e}");
@@ -2418,7 +2418,7 @@ fn cmd_validate(path: &str) {
 
 /// apply-config: 应用声明式配置文件到数据库
 fn cmd_apply_config(path: &str) {
-    let config = match cc_switch_lib::core::decl_config::DeclConfig::from_yaml_file(path) {
+    let config = match cc_switch_core::core::decl_config::DeclConfig::from_yaml_file(path) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("加载配置文件失败: {e}");
@@ -2465,8 +2465,8 @@ fn cmd_sort_providers(app: String, order: String) {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::AppState::new(db);
-    let app_type = match cc_switch_lib::AppType::from_str(&app) {
+    let app_state = cc_switch_core::AppState::new(db);
+    let app_type = match cc_switch_core::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("错误: {e}");
@@ -2474,7 +2474,7 @@ fn cmd_sort_providers(app: String, order: String) {
         }
     };
 
-    let updates: Vec<cc_switch_lib::ProviderSortUpdate> = match serde_json::from_str(&order) {
+    let updates: Vec<cc_switch_core::ProviderSortUpdate> = match serde_json::from_str(&order) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("解析排序 JSON 失败: {e}");
@@ -2483,7 +2483,7 @@ fn cmd_sort_providers(app: String, order: String) {
         }
     };
 
-    match cc_switch_lib::ProviderService::update_sort_order(&app_state, app_type, updates) {
+    match cc_switch_core::ProviderService::update_sort_order(&app_state, app_type, updates) {
         Ok(_) => println!("供应商排序已更新"),
         Err(e) => {
             eprintln!("更新排序失败: {e}");
@@ -2505,8 +2505,8 @@ fn cmd_import_live(app: String) {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::AppState::new(db);
-    let app_type = match cc_switch_lib::AppType::from_str(&app) {
+    let app_state = cc_switch_core::AppState::new(db);
+    let app_type = match cc_switch_core::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("错误: {e}");
@@ -2514,7 +2514,7 @@ fn cmd_import_live(app: String) {
         }
     };
 
-    match cc_switch_lib::ProviderService::import_default_config(&app_state, app_type) {
+    match cc_switch_core::ProviderService::import_default_config(&app_state, app_type) {
         Ok(true) => println!("已从 Live 配置导入供应商到 {app}"),
         Ok(false) => println!("{app} 已有供应商，跳过导入"),
         Err(e) => {
@@ -2530,14 +2530,14 @@ fn cmd_read_live(app: String) {
         eprintln!("错误: {e}");
         std::process::exit(1);
     }
-    let app_type = match cc_switch_lib::AppType::from_str(&app) {
+    let app_type = match cc_switch_core::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("错误: {e}");
             std::process::exit(1);
         }
     };
-    match cc_switch_lib::ProviderService::read_live_settings(app_type) {
+    match cc_switch_core::ProviderService::read_live_settings(app_type) {
         Ok(settings) => println!(
             "{}",
             serde_json::to_string_pretty(&settings).unwrap_or_else(|_| "{}".to_string())
@@ -2553,7 +2553,7 @@ fn cmd_read_live(app: String) {
 fn cmd_fetch_models(base_url: &str, api_key: &str, full_url: bool, models_path: Option<&str>) {
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async {
-        match cc_switch_lib::fetch_models_for_config(
+        match cc_switch_core::fetch_models_for_config(
             base_url.to_string(),
             api_key.to_string(),
             Some(full_url),
@@ -2585,8 +2585,8 @@ fn cmd_sync_live() {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::AppState::new(db);
-    match cc_switch_lib::ProviderService::sync_current_to_live(&app_state) {
+    let app_state = cc_switch_core::AppState::new(db);
+    match cc_switch_core::ProviderService::sync_current_to_live(&app_state) {
         Ok(_) => println!("已将数据库供应商同步到 Live 配置"),
         Err(e) => {
             eprintln!("同步失败: {e}");
@@ -2604,7 +2604,7 @@ fn cmd_proxy_config(action: &str, config: Option<&str>) {
             std::process::exit(1);
         }
     };
-    let proxy_service = cc_switch_lib::ProxyService::new(db);
+    let proxy_service = cc_switch_core::ProxyService::new(db);
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async move {
         match action {
@@ -2626,7 +2626,7 @@ fn cmd_proxy_config(action: &str, config: Option<&str>) {
                         std::process::exit(1);
                     }
                 };
-                let cfg: cc_switch_lib::ProxyConfig = match serde_json::from_str(config_json) {
+                let cfg: cc_switch_core::ProxyConfig = match serde_json::from_str(config_json) {
                     Ok(c) => c,
                     Err(e) => {
                         eprintln!("解析配置失败: {e}");
@@ -2679,7 +2679,7 @@ fn cmd_global_proxy_config(action: &str, config: Option<&str>) {
                         std::process::exit(1);
                     }
                 };
-                let cfg: cc_switch_lib::GlobalProxyConfig = match serde_json::from_str(config_json)
+                let cfg: cc_switch_core::GlobalProxyConfig = match serde_json::from_str(config_json)
                 {
                     Ok(c) => c,
                     Err(e) => {
@@ -2737,7 +2737,7 @@ fn cmd_app_proxy_config(action: &str, app: &str, config: Option<&str>) {
                         std::process::exit(1);
                     }
                 };
-                let cfg: cc_switch_lib::AppProxyConfig = match serde_json::from_str(config_json) {
+                let cfg: cc_switch_core::AppProxyConfig = match serde_json::from_str(config_json) {
                     Ok(c) => c,
                     Err(e) => {
                         eprintln!("解析配置失败: {e}");
@@ -2879,7 +2879,7 @@ fn cmd_takeover_status() {
             std::process::exit(1);
         }
     };
-    let proxy_service = cc_switch_lib::ProxyService::new(db);
+    let proxy_service = cc_switch_core::ProxyService::new(db);
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async move {
         match proxy_service.is_takeover_active().await {
@@ -3073,16 +3073,16 @@ fn cmd_config_snippet(action: &str, app: String, snippet: Option<&str>) {
             }
         }
         "extract" => {
-            let app_type = match cc_switch_lib::AppType::from_str(&app) {
+            let app_type = match cc_switch_core::AppType::from_str(&app) {
                 Ok(t) => t,
                 Err(e) => {
                     eprintln!("错误: {e}");
                     std::process::exit(1);
                 }
             };
-            match cc_switch_lib::ProviderService::read_live_settings(app_type.clone()) {
+            match cc_switch_core::ProviderService::read_live_settings(app_type.clone()) {
                 Ok(settings) => {
-                    match cc_switch_lib::ProviderService::extract_common_config_snippet_from_settings(
+                    match cc_switch_core::ProviderService::extract_common_config_snippet_from_settings(
                         app_type,
                         &settings,
                     ) {
@@ -3170,7 +3170,7 @@ fn cmd_request_logs(
         }
     };
 
-    let filters = cc_switch_lib::LogFilters {
+    let filters = cc_switch_core::LogFilters {
         app_type: app.map(|s| s.to_string()),
         provider_name: provider.map(|s| s.to_string()),
         model: model.map(|s| s.to_string()),
@@ -3285,7 +3285,7 @@ fn cmd_check_limits(app: String, id: String) {
 
 /// backup-delete: 删除数据库备份
 fn cmd_backup_delete(name: String) {
-    match cc_switch_lib::Database::delete_backup(&name) {
+    match cc_switch_core::Database::delete_backup(&name) {
         Ok(_) => println!("备份 '{name}' 已删除"),
         Err(e) => {
             eprintln!("删除备份失败: {e}");
@@ -3296,7 +3296,7 @@ fn cmd_backup_delete(name: String) {
 
 /// backup-rename: 重命名数据库备份
 fn cmd_backup_rename(old_name: String, new_name: String) {
-    match cc_switch_lib::Database::rename_backup(&old_name, &new_name) {
+    match cc_switch_core::Database::rename_backup(&old_name, &new_name) {
         Ok(new_filename) => println!("备份已重命名: {old_name} → {new_filename}"),
         Err(e) => {
             eprintln!("重命名备份失败: {e}");
@@ -3333,8 +3333,8 @@ fn cmd_endpoint(action: &str, app: Option<&str>, id: Option<&str>, url: Option<&
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::AppState::new(db);
-    let app_type = match cc_switch_lib::AppType::from_str(app) {
+    let app_state = cc_switch_core::AppState::new(db);
+    let app_type = match cc_switch_core::AppType::from_str(app) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("错误: {e}");
@@ -3344,7 +3344,7 @@ fn cmd_endpoint(action: &str, app: Option<&str>, id: Option<&str>, url: Option<&
 
     match action {
         "list" => {
-            match cc_switch_lib::ProviderService::get_custom_endpoints(&app_state, app_type, id) {
+            match cc_switch_core::ProviderService::get_custom_endpoints(&app_state, app_type, id) {
                 Ok(endpoints) => {
                     if endpoints.is_empty() {
                         println!("(无自定义端点)");
@@ -3369,7 +3369,7 @@ fn cmd_endpoint(action: &str, app: Option<&str>, id: Option<&str>, url: Option<&
                     std::process::exit(1);
                 }
             };
-            match cc_switch_lib::ProviderService::add_custom_endpoint(
+            match cc_switch_core::ProviderService::add_custom_endpoint(
                 &app_state,
                 app_type,
                 id,
@@ -3390,7 +3390,7 @@ fn cmd_endpoint(action: &str, app: Option<&str>, id: Option<&str>, url: Option<&
                     std::process::exit(1);
                 }
             };
-            match cc_switch_lib::ProviderService::remove_custom_endpoint(
+            match cc_switch_core::ProviderService::remove_custom_endpoint(
                 &app_state,
                 app_type,
                 id,
@@ -3423,7 +3423,7 @@ fn cmd_add_mcp(id: String, name: String, command: String, args: Option<&str>, en
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::AppState::new(db);
+    let app_state = cc_switch_core::AppState::new(db);
 
     let args_vec: Vec<String> = match args {
         Some(a) => serde_json::from_str(a).unwrap_or_else(|_| vec![]),
@@ -3440,11 +3440,11 @@ fn cmd_add_mcp(id: String, name: String, command: String, args: Option<&str>, en
         "env": env_map,
     });
 
-    let mcp_server = cc_switch_lib::McpServer {
+    let mcp_server = cc_switch_core::McpServer {
         id: id.clone(),
         name: name.clone(),
         server: server_config,
-        apps: cc_switch_lib::McpApps {
+        apps: cc_switch_core::McpApps {
             claude: true,
             codex: false,
             gemini: false,
@@ -3459,7 +3459,7 @@ fn cmd_add_mcp(id: String, name: String, command: String, args: Option<&str>, en
 
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async move {
-        match cc_switch_lib::McpService::upsert_server(&app_state, mcp_server) {
+        match cc_switch_core::McpService::upsert_server(&app_state, mcp_server) {
             Ok(_) => println!("MCP 服务器 '{id}' ({name}) 已添加/更新"),
             Err(e) => {
                 eprintln!("添加 MCP 服务器失败: {e}");
@@ -3478,8 +3478,8 @@ fn cmd_remove_mcp(id: String) {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::AppState::new(db);
-    match cc_switch_lib::McpService::delete_server(&app_state, &id) {
+    let app_state = cc_switch_core::AppState::new(db);
+    match cc_switch_core::McpService::delete_server(&app_state, &id) {
         Ok(_) => println!("MCP 服务器 '{id}' 已删除"),
         Err(e) => {
             eprintln!("删除 MCP 服务器失败: {e}");
@@ -3509,8 +3509,8 @@ fn cmd_toggle_mcp(id: String, app: String, enabled: String) {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::AppState::new(db);
-    let app_type = match cc_switch_lib::AppType::from_str(&app) {
+    let app_state = cc_switch_core::AppState::new(db);
+    let app_type = match cc_switch_core::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("错误: {e}");
@@ -3519,7 +3519,7 @@ fn cmd_toggle_mcp(id: String, app: String, enabled: String) {
     };
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async move {
-        match cc_switch_lib::McpService::toggle_app(&app_state, &id, app_type, enable) {
+        match cc_switch_core::McpService::toggle_app(&app_state, &id, app_type, enable) {
             Ok(_) => println!(
                 "MCP '{id}' 在 {app} 中已{}",
                 if enable { "启用" } else { "禁用" }
@@ -3633,8 +3633,8 @@ fn cmd_add_prompt(
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::AppState::new(db);
-    let app_type = match cc_switch_lib::AppType::from_str(&app) {
+    let app_state = cc_switch_core::AppState::new(db);
+    let app_type = match cc_switch_core::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("错误: {e}");
@@ -3642,7 +3642,7 @@ fn cmd_add_prompt(
         }
     };
 
-    let prompt = cc_switch_lib::Prompt {
+    let prompt = cc_switch_core::Prompt {
         id: id.clone(),
         name: name.clone(),
         content: prompt_content,
@@ -3654,7 +3654,7 @@ fn cmd_add_prompt(
 
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async move {
-        match cc_switch_lib::PromptService::upsert_prompt(&app_state, app_type, &id, prompt) {
+        match cc_switch_core::PromptService::upsert_prompt(&app_state, app_type, &id, prompt) {
             Ok(_) => println!("Prompt '{id}' ({name}) 已添加/更新到 {app}"),
             Err(e) => {
                 eprintln!("添加 Prompt 失败: {e}");
@@ -3677,15 +3677,15 @@ fn cmd_remove_prompt(app: String, id: String) {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::AppState::new(db);
-    let app_type = match cc_switch_lib::AppType::from_str(&app) {
+    let app_state = cc_switch_core::AppState::new(db);
+    let app_type = match cc_switch_core::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("错误: {e}");
             std::process::exit(1);
         }
     };
-    match cc_switch_lib::PromptService::delete_prompt(&app_state, app_type, &id) {
+    match cc_switch_core::PromptService::delete_prompt(&app_state, app_type, &id) {
         Ok(_) => println!("Prompt '{id}' 已从 {app} 删除"),
         Err(e) => {
             eprintln!("删除 Prompt 失败: {e}");
@@ -3715,8 +3715,8 @@ fn cmd_enable_prompt(app: String, id: String, enabled: String) {
             std::process::exit(1);
         }
     };
-    let app_state = cc_switch_lib::AppState::new(db);
-    let app_type = match cc_switch_lib::AppType::from_str(&app) {
+    let app_state = cc_switch_core::AppState::new(db);
+    let app_type = match cc_switch_core::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("错误: {e}");
@@ -3724,7 +3724,7 @@ fn cmd_enable_prompt(app: String, id: String, enabled: String) {
         }
     };
     if enable {
-        match cc_switch_lib::PromptService::enable_prompt(&app_state, app_type, &id) {
+        match cc_switch_core::PromptService::enable_prompt(&app_state, app_type, &id) {
             Ok(_) => println!("Prompt '{id}' 已启用 ({app})"),
             Err(e) => {
                 eprintln!("启用失败: {e}");
@@ -3733,7 +3733,7 @@ fn cmd_enable_prompt(app: String, id: String, enabled: String) {
         }
     } else {
         // 禁用：先获取现有 prompt，修改 enabled 后 upsert
-        match cc_switch_lib::PromptService::get_prompts(&app_state, app_type.clone()) {
+        match cc_switch_core::PromptService::get_prompts(&app_state, app_type.clone()) {
             Ok(prompts) => {
                 let mut prompt = match prompts.get(&id) {
                     Some(p) => p.clone(),
@@ -3743,7 +3743,7 @@ fn cmd_enable_prompt(app: String, id: String, enabled: String) {
                     }
                 };
                 prompt.enabled = false;
-                match cc_switch_lib::PromptService::upsert_prompt(&app_state, app_type, &id, prompt)
+                match cc_switch_core::PromptService::upsert_prompt(&app_state, app_type, &id, prompt)
                 {
                     Ok(_) => println!("Prompt '{id}' 已禁用 ({app})"),
                     Err(e) => {
@@ -3769,7 +3769,7 @@ fn cmd_list_skills(app: Option<&str>) {
             std::process::exit(1);
         }
     };
-    match cc_switch_lib::SkillService::get_all_installed(&db) {
+    match cc_switch_core::SkillService::get_all_installed(&db) {
         Ok(skills) => {
             if skills.is_empty() {
                 println!("(无已安装 Skills)");
@@ -3824,7 +3824,7 @@ fn cmd_remove_skill(id: String, app: Option<&str>) {
             std::process::exit(1);
         }
     };
-    match cc_switch_lib::SkillService::uninstall(&db, &id) {
+    match cc_switch_core::SkillService::uninstall(&db, &id) {
         Ok(result) => {
             println!("Skill '{id}' 已卸载");
             if let Some(backup) = &result.backup_path {
@@ -3859,14 +3859,14 @@ fn cmd_toggle_skill(id: String, app: String, enabled: String) {
             std::process::exit(1);
         }
     };
-    let app_type = match cc_switch_lib::AppType::from_str(&app) {
+    let app_type = match cc_switch_core::AppType::from_str(&app) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("错误: {e}");
             std::process::exit(1);
         }
     };
-    match cc_switch_lib::SkillService::toggle_app(&db, &id, &app_type, enable) {
+    match cc_switch_core::SkillService::toggle_app(&db, &id, &app_type, enable) {
         Ok(_) => println!(
             "Skill '{id}' 在 {app} 中已{}",
             if enable { "启用" } else { "禁用" }
@@ -3885,7 +3885,7 @@ fn cmd_check_env() {
     ];
     let mut found_any = false;
     for app in &all_apps {
-        match cc_switch_lib::check_env_conflicts(app.to_string()) {
+        match cc_switch_core::check_env_conflicts(app.to_string()) {
             Ok(conflicts) => {
                 if !conflicts.is_empty() {
                     found_any = true;
@@ -3911,7 +3911,7 @@ fn cmd_list_sessions(app: Option<&str>, limit: u32) {
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async {
         let sessions =
-            match tokio::task::spawn_blocking(|| cc_switch_lib::session_manager::scan_sessions())
+            match tokio::task::spawn_blocking(|| cc_switch_core::session_manager::scan_sessions())
                 .await
             {
                 Ok(s) => s,
@@ -4212,9 +4212,9 @@ fn validated_app(app: &str) -> Result<(), String> {
 
 /// 合并设置用于显示（将当前值与默认值合并）
 fn merge_settings_for_display(
-    current: &cc_switch_lib::AppSettings,
-    _default: &cc_switch_lib::AppSettings,
-) -> cc_switch_lib::AppSettings {
+    current: &cc_switch_core::AppSettings,
+    _default: &cc_switch_core::AppSettings,
+) -> cc_switch_core::AppSettings {
     current.clone()
 }
 

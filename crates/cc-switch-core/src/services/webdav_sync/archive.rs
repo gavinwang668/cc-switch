@@ -122,7 +122,10 @@ pub(crate) fn restore_skills_zip(raw: &[u8]) -> Result<(), AppError> {
             return Err(localized(
                 "webdav.sync.skills_zip_path_traversal",
                 format!("ZIP 条目路径穿越: {}", safe_name.display()),
-                format!("Path traversal detected in ZIP entry: {}", safe_name.display()),
+                format!(
+                    "Path traversal detected in ZIP entry: {}",
+                    safe_name.display()
+                ),
             ));
         }
 

@@ -300,10 +300,18 @@ fn is_path_allowed(path: &Path) -> Result<(), AppError> {
 
     // 敏感目录黑名单
     let sensitive_patterns = [
-        "/etc/", "/usr/", "/bin/", "/sbin/", "/lib/",
-        "/sys/", "/proc/", "/dev/",
-        "/.ssh/", "/.gnupg/",
-        "/root/.ssh/", "/root/.gnupg/",
+        "/etc/",
+        "/usr/",
+        "/bin/",
+        "/sbin/",
+        "/lib/",
+        "/sys/",
+        "/proc/",
+        "/dev/",
+        "/.ssh/",
+        "/.gnupg/",
+        "/root/.ssh/",
+        "/root/.gnupg/",
     ];
 
     for pattern in &sensitive_patterns {
@@ -317,9 +325,19 @@ fn is_path_allowed(path: &Path) -> Result<(), AppError> {
 
     // 敏感文件名黑名单
     let sensitive_names = [
-        "passwd", "shadow", "group", "hosts", "resolv.conf",
-        "bashrc", "bash_profile", "zshrc", "profile",
-        "authorized_keys", "id_rsa", "id_dsa", "id_ecdsa",
+        "passwd",
+        "shadow",
+        "group",
+        "hosts",
+        "resolv.conf",
+        "bashrc",
+        "bash_profile",
+        "zshrc",
+        "profile",
+        "authorized_keys",
+        "id_rsa",
+        "id_dsa",
+        "id_ecdsa",
     ];
 
     let file_name = path

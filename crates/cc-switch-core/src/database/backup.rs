@@ -199,7 +199,10 @@ impl Database {
         let sql_upper = trimmed.to_uppercase();
         for keyword in FORBIDDEN_SQL_KEYWORDS {
             if sql_upper.contains(keyword) {
-                log::error!("SQL import blocked: contains forbidden keyword '{}'", keyword);
+                log::error!(
+                    "SQL import blocked: contains forbidden keyword '{}'",
+                    keyword
+                );
                 return Err(AppError::localized(
                     "backup.sql.forbidden_keyword",
                     &format!("SQL 文件包含禁止的关键字: {}", keyword),
