@@ -66,6 +66,7 @@ flate2 = "1"
 brotli = "7"
 zstd = "0.13"
 arboard = "3.6"
+ipnet = "2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

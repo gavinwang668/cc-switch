@@ -270,4 +270,69 @@ impl DeclConfig {
 
         Ok(actions.join("\n"))
     }
+
+    /// 从数据库反向构造 DeclConfig（用于 export-yaml / diff）
+    pub fn from_database(db: &crate::database::Database) -> Result<Self, String> {
+        let mut config = DeclConfig::default();
+
+        // 读取所有供应商
+        let all_providers = db
+            .get_all_providers("claude")
+            .or(db.get_all_providers("codex"))
+            .or(db.get_all_providers("gemini"))
+            .or(db.get_all_providers("opencode"))
+            .or(db.get_all_providers("openclaw"))
+            .or(db.get_all_providers("hermes"))
+            .or(db.get_all_providers("claude-desktop"))
+            .unwrap_or_default();
+
+        for (app_type, providers) in all_providers {
+            let current_id = db.get_current_provider_id(&app_type).unwrap_or_default();
+            for p in providers {
+                let mut env_map = HashMap::new();
+                if let Some(env_val) = p.settings_config.get("env") {
+                    if let Some(obj) = env_val.as_object() {
+                        for (k, v) in obj {
+                            if let Some(s) = v.as_str() {
+                                env_map.insert(k.clone(), s.to_string());
+                            }
+                        }
+                    }
+                }
+                config.providers.push(ProviderEntry {
+                    app: app_type.clone(),
+                    id: p.id.clone(),
+                    name: p.name.clone(),
+                    env: env_map,
+                    current: p.id == current_id,
+                });
+            }
+        }
+
+        // 读取故障转移队列
+        for app in &["claude", "codex", "gemini"] {
+            if let Ok(queue) = db.get_failover_queue(app) {
+                if !queue.is_empty() {
+                    config.failover.queue.insert(
+                        app.to_string(),
+                        queue.iter().map(|q| q.provider_id.clone()).collect(),
+                    );
+                }
+            }
+            if let Ok((_, af)) = db.get_proxy_flags_sync(app) {
+                if af {
+                    config.failover.auto = true;
+                }
+            }
+        }
+
+        // 读取接管状态
+        for app in &["claude", "codex", "gemini"] {
+            if let Ok(true) = db.is_takeover_active(app) {
+                config.proxy.takeover.insert(app.to_string(), true);
+            }
+        }
+
+        Ok(config)
+    }
 }

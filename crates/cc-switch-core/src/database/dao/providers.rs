@@ -705,6 +705,39 @@ impl Database {
 
         Ok(true)
     }
+
+    /// 启用/禁用供应商（REQ M-7）
+    ///
+    /// 禁用后 ProviderRouter 会跳过该供应商，不参与故障转移和代理路由。
+    pub fn set_provider_enabled(
+        &self,
+        app_type: &str,
+        provider_id: &str,
+        enabled: bool,
+    ) -> Result<(), AppError> {
+        let conn = lock_conn!(self.conn);
+        // 检查供应商是否存在
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM providers WHERE id = ?1 AND app_type = ?2)",
+                params![provider_id, app_type],
+                |row| row.get(0),
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        if !exists {
+            return Err(AppError::Config(format!(
+                "供应商 {}/{} 不存在",
+                app_type, provider_id
+            )));
+        }
+        let disabled = if enabled { 0 } else { 1 };
+        conn.execute(
+            "UPDATE providers SET disabled = ?1 WHERE id = ?2 AND app_type = ?3",
+            params![disabled, provider_id, app_type],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

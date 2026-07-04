@@ -1,6 +1,6 @@
 # CC Switch CLI 完整命令参考手册
 
-> 文档版本：v2.0 ｜ 更新日期：2026-06-27
+> 文档版本：v2.1 ｜ 更新日期：2026-07-04
 >
 > 本文档是 `cc-switch-cli` 命令行工具的完整参考手册，涵盖所有命令、参数、选项、使用示例及故障排查指南。
 
@@ -477,7 +477,16 @@ Skills 管理:
     list-skills / remove-skill / toggle-skill
 
 其他:
-    check-env / list-sessions / help
+    check-env / list-sessions / smoke-test / help
+
+代理安全与热重载:
+    reload / auth-token / acl
+
+诊断与测试:
+    preview-conversion / proxy-trace / replay-request
+
+配置管理增强:
+    export-yaml / diff / rollback / toggle-provider
 ```
 
 ---
@@ -2422,4 +2431,198 @@ sudo apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev
 | 测试供应商 | `verify-key` / `speedtest` |
 | 备份恢复 | `backup-create` / `backup-restore` |
 | 配置导出迁移 | `export-config` / `import-config` |
+
+---
+
+## 代理安全与热重载（v3.16.6 新增）
+
+### reload — 热重载代理配置
+
+```bash
+cc-switch-cli reload
+```
+
+不中断活跃连接，重新加载代理运行时配置（供应商列表、熔断器、故障转移队列等）。需要代理服务器正在运行。
+
+**示例**：
+
+```bash
+cc-switch-cli reload
+# 输出: ✓ 代理配置已热重载
+```
+
+### auth-token — 代理访问令牌
+
+```bash
+cc-switch-cli auth-token [set|clear] [--token <TOKEN>]
+```
+
+不指定参数则查看当前状态。设置后，所有代理请求必须携带 `Authorization: Bearer <token>` 头。清除后代理回到开放状态。
+
+**示例**：
+
+```bash
+# 查看状态
+cc-switch-cli auth-token
+# 输出: 令牌未设置（代理完全开放）
+
+# 设置令牌
+cc-switch-cli auth-token set --token "my-secret-token-123"
+
+# 清除令牌
+cc-switch-cli auth-token clear
+```
+
+### acl — IP 白名单管理
+
+```bash
+cc-switch-cli acl <list|add|remove> [--cidr <CIDR>]
+```
+
+管理代理的 IP CIDR 白名单。设置后，只有白名单内的 IP 可以访问代理。
+
+**示例**：
+
+```bash
+# 列出白名单
+cc-switch-cli acl list
+
+# 添加 CIDR
+cc-switch-cli acl add --cidr "10.0.0.0/8"
+cc-switch-cli acl add --cidr "172.16.0.0/12"
+
+# 移除 CIDR
+cc-switch-cli acl remove --cidr "10.0.0.0/8"
+```
+
+---
+
+## 诊断与测试（v3.16.6 新增）
+
+### smoke-test — 协议转换烟雾测试
+
+```bash
+cc-switch-cli smoke-test [APP]
+```
+
+不走网络，直接调用内部转换模块验证协议转换链路。不指定 APP 则测试全部应用。
+
+**示例**：
+
+```bash
+# 全部测试
+cc-switch-cli smoke-test
+
+# 仅测试 Claude
+cc-switch-cli smoke-test claude
+```
+
+### preview-conversion — 预览协议转换
+
+```bash
+cc-switch-cli preview-conversion --from <FMT> --to <FMT> --payload <JSON> [--base-url <URL>]
+```
+
+将请求体 JSON 从一种 API 格式转换为另一种，预览输出。不发送实际请求。
+
+**示例**：
+
+```bash
+cc-switch-cli preview-conversion \
+  --from anthropic \
+  --to openai_chat \
+  --payload '{"model":"claude-sonnet-5","messages":[{"role":"user","content":"Hello"}],"max_tokens":10}'
+```
+
+### proxy-trace — 代理链路跟踪指南
+
+```bash
+cc-switch-cli proxy-trace <APP> --model <MODEL>
+```
+
+生成 curl 命令和日志查看指南，帮助手动跟踪代理链路。
+
+**示例**：
+
+```bash
+cc-switch-cli proxy-trace claude --model claude-sonnet-5
+```
+
+### replay-request — 重放历史请求
+
+```bash
+cc-switch-cli replay-request <REQUEST_ID>
+```
+
+查看历史请求详情并生成 curl 重放命令。需 `CC_SWITCH_LOG_BODIES=1` 环境变量启用请求体记录。
+
+**示例**：
+
+```bash
+cc-switch-cli replay-request req_abc123
+```
+
+---
+
+## 配置管理增强（v3.16.6 新增）
+
+### export-yaml — 导出配置为 YAML
+
+```bash
+cc-switch-cli export-yaml <PATH>
+```
+
+将数据库配置导出为声明式 YAML 格式（`apply-config` 的逆操作）。
+
+**示例**：
+
+```bash
+cc-switch-cli export-yaml /etc/cc-switch/config.yaml
+```
+
+### diff — 对比配置差异
+
+```bash
+cc-switch-cli diff <PATH>
+```
+
+对比 YAML 文件与当前数据库配置，显示新增/变更的供应商数量。
+
+**示例**：
+
+```bash
+cc-switch-cli diff /etc/cc-switch/config.yaml
+```
+
+### rollback — 回滚配置
+
+```bash
+cc-switch-cli rollback
+```
+
+回滚到最近一次 `apply-config` 执行前的备份。
+
+**示例**：
+
+```bash
+cc-switch-cli rollback
+```
+
+### toggle-provider — 启用/禁用供应商
+
+```bash
+cc-switch-cli toggle-provider <APP> <ID> <on|off>
+```
+
+临时禁用供应商而不删除配置。禁用的供应商不会参与代理路由和故障转移。
+
+**示例**：
+
+```bash
+# 禁用
+cc-switch-cli toggle-provider claude backup-provider off
+
+# 重新启用
+cc-switch-cli toggle-provider claude backup-provider on
+```
 | 停止服务 | `stop` |

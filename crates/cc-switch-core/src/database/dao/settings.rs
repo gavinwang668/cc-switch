@@ -345,4 +345,58 @@ impl Database {
             .map_err(|e| AppError::Database(format!("序列化日志配置失败: {e}")))?;
         self.set_setting("log_config", &json)
     }
+
+    // --- 代理入口访问控制（REQ-023） ---
+
+    const PROXY_AUTH_TOKEN_KEY: &'static str = "proxy_auth_token";
+    const PROXY_ACL_CIDRS_KEY: &'static str = "proxy_acl_cidrs";
+
+    pub fn get_proxy_auth_token(&self) -> Result<Option<String>, AppError> {
+        self.get_setting(Self::PROXY_AUTH_TOKEN_KEY)
+    }
+
+    pub fn set_proxy_auth_token(&self, token: Option<&str>) -> Result<(), AppError> {
+        match token {
+            Some(t) if !t.trim().is_empty() => {
+                self.set_setting(Self::PROXY_AUTH_TOKEN_KEY, t.trim())
+            }
+            _ => {
+                let conn = lock_conn!(self.conn);
+                conn.execute(
+                    "DELETE FROM settings WHERE key = ?1",
+                    rusqlite::params![Self::PROXY_AUTH_TOKEN_KEY],
+                )
+                .map_err(|e| AppError::Database(e.to_string()))?;
+                Ok(())
+            }
+        }
+    }
+
+    pub fn get_proxy_acl_cidrs(&self) -> Result<Vec<String>, AppError> {
+        match self.get_setting(Self::PROXY_ACL_CIDRS_KEY)? {
+            Some(json) => serde_json::from_str::<Vec<String>>(&json)
+                .map_err(|e| AppError::Database(format!("解析代理 ACL 失败: {e}"))),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    pub fn set_proxy_acl_cidrs(&self, cidrs: &[String]) -> Result<(), AppError> {
+        if cidrs.is_empty() {
+            let conn = lock_conn!(self.conn);
+            conn.execute(
+                "DELETE FROM settings WHERE key = ?1",
+                rusqlite::params![Self::PROXY_ACL_CIDRS_KEY],
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+            return Ok(());
+        }
+        for c in cidrs {
+            c.parse::<ipnet::IpNet>().map_err(|e| {
+                AppError::Config(format!("非法 CIDR '{c}': {e}"))
+            })?;
+        }
+        let json = serde_json::to_string(cidrs)
+            .map_err(|e| AppError::Database(format!("序列化 ACL 失败: {e}")))?;
+        self.set_setting(Self::PROXY_ACL_CIDRS_KEY, &json)
+    }
 }

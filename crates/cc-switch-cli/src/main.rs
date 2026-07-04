@@ -532,6 +532,77 @@ enum Commands {
         #[arg(long, default_value = "7")]
         days: u32,
     },
+    /// 代理热重载
+    Reload,
+    /// 设置/清除代理访问令牌
+    AuthToken {
+        /// set 或 clear
+        action: Option<String>,
+        /// 令牌值（set 时需要）
+        token: Option<String>,
+    },
+    /// 管理 IP 白名单
+    Acl {
+        /// list / add / remove
+        action: Option<String>,
+        /// CIDR 地址
+        #[arg(long)]
+        cidr: Option<String>,
+    },
+    /// 协议转换烟雾测试
+    SmokeTest {
+        /// 应用类型（不指定则全部测试）
+        app: Option<String>,
+    },
+    /// 将配置导出为 YAML
+    ExportYaml {
+        /// 输出文件路径
+        path: String,
+    },
+    /// 对比 YAML 与当前配置
+    Diff {
+        /// YAML 文件路径
+        path: String,
+    },
+    /// 回滚到上一个 apply 前的备份
+    Rollback,
+    /// 启用/禁用供应商
+    ToggleProvider {
+        /// 应用类型
+        app: String,
+        /// 供应商 ID
+        id: String,
+        /// on 或 off
+        enabled: String,
+    },
+    /// 预览协议转换
+    PreviewConversion {
+        /// 源格式
+        #[arg(long)]
+        from: String,
+        /// 目标格式
+        #[arg(long)]
+        to: String,
+        /// 请求体 JSON
+        #[arg(long)]
+        payload: String,
+        /// Base URL
+        #[arg(long)]
+        base_url: Option<String>,
+    },
+    /// 请求代理链路跟踪
+    ProxyTrace {
+        /// 应用类型
+        app: String,
+        /// 模型名
+        #[arg(long)]
+        model: String,
+    },
+    /// 重放历史请求
+    ReplayRequest {
+        /// 请求 ID
+        request_id: String,
+    },
     /// 列出所有可用命令
     Help,
 }
@@ -735,6 +806,19 @@ fn main() {
         Commands::UsageTrends { days } => cmd_usage_trends(*days),
         Commands::ProviderStats { days } => cmd_provider_stats(*days),
         Commands::ModelStats { days } => cmd_model_stats(*days),
+        Commands::Reload => cmd_reload(),
+        Commands::AuthToken { action, token } => cmd_auth_token(action.as_deref(), token.as_deref()),
+        Commands::Acl { action, cidr } => cmd_acl(action.as_deref(), cidr.as_deref()),
+        Commands::SmokeTest { app } => cmd_smoke_test(app.as_deref()),
+        Commands::ExportYaml { path } => cmd_export_yaml(path),
+        Commands::Diff { path } => cmd_diff(path),
+        Commands::Rollback => cmd_rollback(),
+        Commands::ToggleProvider { app, id, enabled } => cmd_toggle_provider(app, id, enabled),
+        Commands::PreviewConversion { from, to, payload, base_url } => {
+            cmd_preview_conversion(from, to, payload, base_url.as_deref())
+        }
+        Commands::ProxyTrace { app, model } => cmd_proxy_trace(app, model),
+        Commands::ReplayRequest { request_id } => cmd_replay_request(request_id),
         Commands::Help => cmd_help(),
     }
 }
@@ -4077,6 +4161,464 @@ fn cmd_model_stats(days: u32) {
     }
 }
 
+// ============================================================================
+// Plan C: 新功能（热重载 / 访问控制 / 烟雾测试）
+// ============================================================================
+
+/// reload: 热重载代理配置
+fn cmd_reload() {
+    let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
+    rt.block_on(async {
+        let status = match cc_switch_core::services::ProxyService::get_status().await {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("错误: 获取代理状态失败: {e}");
+                std::process::exit(1);
+            }
+        };
+        if !status.running {
+            eprintln!("错误: 代理服务器未运行，无法热重载。请先执行 start 或 daemon");
+            std::process::exit(1);
+        }
+        // 向运行中代理发送 reload 信号
+        let client = match reqwest::Client::new()
+            .post(format!("http://{}:{}/__internal/reload", status.address, status.port))
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                eprintln!("错误: 无法连接到代理服务器: {e}");
+                std::process::exit(1);
+            }
+        };
+        if client.status().is_success() {
+            println!("✓ 代理配置已热重载");
+        } else {
+            eprintln!("代理返回错误: HTTP {}", client.status());
+            std::process::exit(1);
+        }
+    });
+}
+
+/// auth-token: 设置/清除代理访问令牌
+fn cmd_auth_token(action: Option<&str>, token: Option<&str>) {
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
+    match action {
+        Some("set") => {
+            let t = token.unwrap_or("");
+            if t.trim().is_empty() {
+                eprintln!("错误: --token 不能为空");
+                std::process::exit(1);
+            }
+            if let Err(e) = db.set_proxy_auth_token(Some(t)) {
+                eprintln!("设置令牌失败: {e}");
+                std::process::exit(1);
+            }
+            println!("✓ 代理访问令牌已设置");
+        }
+        Some("clear") => {
+            if let Err(e) = db.set_proxy_auth_token(None) {
+                eprintln!("清除令牌失败: {e}");
+                std::process::exit(1);
+            }
+            println!("✓ 代理访问令牌已清除（代理回到开放状态）");
+        }
+        _ => {
+            match db.get_proxy_auth_token() {
+                Ok(Some(t)) => println!("令牌已设置 ({}...)", &t[..t.len().min(8)]),
+                Ok(None) => println!("令牌未设置（代理完全开放）"),
+                Err(e) => {
+                    eprintln!("读取令牌失败: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
+}
+
+/// acl: 管理 IP 白名单
+fn cmd_acl(action: Option<&str>, cidr: Option<&str>) {
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
+    match action {
+        Some("list") => {
+            match db.get_proxy_acl_cidrs() {
+                Ok(cidrs) => {
+                    if cidrs.is_empty() {
+                        println!("IP 白名单未设置（不限制来源 IP）");
+                    } else {
+                        println!("IP 白名单 ({} 条):", cidrs.len());
+                        for c in &cidrs {
+                            println!("  {c}");
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("读取 ACL 失败: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        Some("add") => {
+            let c = match cidr {
+                Some(c) => c.to_string(),
+                None => {
+                    eprintln!("错误: --cidr 参数必填");
+                    std::process::exit(1);
+                }
+            };
+            let mut existing = db.get_proxy_acl_cidrs().unwrap_or_default();
+            if existing.contains(&c) {
+                println!("CIDR {c} 已在白名单中");
+                return;
+            }
+            existing.push(c);
+            if let Err(e) = db.set_proxy_acl_cidrs(&existing) {
+                eprintln!("设置 ACL 失败: {e}");
+                std::process::exit(1);
+            }
+            println!("✓ CIDR 已添加到白名单");
+        }
+        Some("remove") => {
+            let c = match cidr {
+                Some(c) => c.to_string(),
+                None => {
+                    eprintln!("错误: --cidr 参数必填");
+                    std::process::exit(1);
+                }
+            };
+            let mut existing = db.get_proxy_acl_cidrs().unwrap_or_default();
+            if let Some(pos) = existing.iter().position(|x| x == &c) {
+                existing.remove(pos);
+                if let Err(e) = db.set_proxy_acl_cidrs(&existing) {
+                    eprintln!("设置 ACL 失败: {e}");
+                    std::process::exit(1);
+                }
+                println!("✓ CIDR 已从白名单移除");
+            } else {
+                eprintln!("CIDR {c} 不在白名单中");
+                std::process::exit(1);
+            }
+        }
+        _ => {
+            eprintln!("用法: cc-switch-cli acl <list|add|remove> [--cidr CIDR]");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// smoke-test: 协议转换烟雾测试
+fn cmd_smoke_test(app: Option<&str>) {
+    let results = if let Some(app_str) = app {
+        let app_type = match cc_switch_core::AppType::from_str(app_str) {
+            Ok(a) => a,
+            Err(_) => {
+                eprintln!("错误: 无效的应用类型: {app_str}");
+                std::process::exit(1);
+            }
+        };
+        let base_url = match &app_type {
+            cc_switch_core::AppType::Claude => "https://api.anthropic.com",
+            cc_switch_core::AppType::Codex => "https://api.openai.com/v1",
+            cc_switch_core::AppType::Gemini => "https://generativelanguage.googleapis.com",
+            _ => "https://api.openai.com/v1",
+        };
+        let fmt = match &app_type {
+            cc_switch_core::AppType::Claude => "anthropic",
+            cc_switch_core::AppType::Gemini => "gemini_native",
+            _ => "openai_chat",
+        };
+        vec![cc_switch_core::proxy::smoke_test::run_smoke_test(
+            &app_type, base_url, Some(fmt),
+        )]
+    } else {
+        cc_switch_core::proxy::smoke_test::run_all_smoke_tests()
+    };
+
+    println!("协议转换烟雾测试:");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    for r in &results {
+        let icon = if r.passed { "✓" } else { "✗" };
+        println!("  {icon} {:<20} {}", r.app_type, r.message);
+    }
+    let passed = results.iter().filter(|r| r.passed).count();
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("结果: {}/{} 通过", passed, results.len());
+    if passed < results.len() {
+        std::process::exit(1);
+    }
+}
+
+// ============================================================================
+// Plan D: 体验改进（export-yaml / diff / rollback / toggle / preview / trace / replay）
+// ============================================================================
+
+/// export-yaml: 将数据库配置导出为声明式 YAML
+fn cmd_export_yaml(path: &str) {
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
+    let config = match cc_switch_core::core::decl_config::DeclConfig::from_database(&db) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("从数据库构造配置失败: {e}");
+            std::process::exit(1);
+        }
+    };
+    let yaml = match serde_yaml::to_string(&config) {
+        Ok(y) => y,
+        Err(e) => {
+            eprintln!("序列化 YAML 失败: {e}");
+            std::process::exit(1);
+        }
+    };
+    if let Err(e) = std::fs::write(path, &yaml) {
+        eprintln!("写入文件失败: {e}");
+        std::process::exit(1);
+    }
+    println!("✓ 配置已导出到: {path}");
+}
+
+/// diff: 对比 YAML 与当前数据库配置
+fn cmd_diff(path: &str) {
+    let yaml_config = match cc_switch_core::core::decl_config::DeclConfig::from_yaml_file(path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("加载 YAML 文件失败: {e}");
+            std::process::exit(1);
+        }
+    };
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
+    let db_config = match cc_switch_core::core::decl_config::DeclConfig::from_database(&db) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("从数据库读取配置失败: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    println!("YAML 与数据库配置对比:");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  YAML 供应商: {} 条", yaml_config.providers.len());
+    println!("  数据库供应商: {} 条", db_config.providers.len());
+    let new_count = yaml_config
+        .providers
+        .iter()
+        .filter(|yp| !db_config.providers.iter().any(|dp| dp.app == yp.app && dp.id == yp.id))
+        .count();
+    let changed_count = yaml_config
+        .providers
+        .iter()
+        .filter(|yp| {
+            db_config
+                .providers
+                .iter()
+                .any(|dp| dp.app == yp.app && dp.id == yp.id && dp.env != yp.env)
+        })
+        .count();
+    if new_count > 0 {
+        println!("  新增供应商: {new_count} 条");
+    }
+    if changed_count > 0 {
+        println!("  变更供应商: {changed_count} 条");
+    }
+    if new_count == 0 && changed_count == 0 && yaml_config.providers.len() == db_config.providers.len() {
+        println!("  ✓ 无差异 — YAML 与数据库配置一致");
+    }
+}
+
+/// rollback: 回滚到上一个 apply 前的备份
+fn cmd_rollback() {
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
+    let backups = match db.list_backups() {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("列出备份失败: {e}");
+            std::process::exit(1);
+        }
+    };
+    let apply_backups: Vec<_> = backups
+        .iter()
+        .filter(|b| b.contains("apply-rollback"))
+        .collect();
+    if apply_backups.is_empty() {
+        eprintln!("没有找到 apply 回滚备份。每次执行 apply-config 会自动创建备份。");
+        std::process::exit(1);
+    }
+    let latest = apply_backups.last().unwrap();
+    match db.restore_backup(latest) {
+        Ok(_) => println!("✓ 已回滚到备份: {latest}"),
+        Err(e) => {
+            eprintln!("回滚失败: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// toggle-provider: 启用/禁用供应商
+fn cmd_toggle_provider(app: &str, id: &str, enabled: &str) {
+    if let Err(e) = validated_app(app) {
+        eprintln!("错误: {e}");
+        std::process::exit(1);
+    }
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
+    let enable = match enabled {
+        "on" | "true" => true,
+        "off" | "false" => false,
+        _ => {
+            eprintln!("错误: 第三个参数必须是 on 或 off");
+            std::process::exit(1);
+        }
+    };
+    match db.set_provider_enabled(app, id, enable) {
+        Ok(_) => {
+            let state = if enable { "启用" } else { "禁用" };
+            println!("✓ 供应商 '{id}' ({app}) 已{state}");
+        }
+        Err(e) => {
+            eprintln!("操作失败: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// preview-conversion: 预览协议转换
+fn cmd_preview_conversion(from: &str, to: &str, payload: &str, base_url: Option<&str>) {
+    let body: serde_json::Value = match serde_json::from_str(payload) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("解析 JSON payload 失败: {e}");
+            std::process::exit(1);
+        }
+    };
+    let url = base_url.unwrap_or("https://api.openai.com/v1");
+    match cc_switch_core::proxy::providers::transform::transform_request(&body, from, to, url) {
+        Ok(transformed) => {
+            println!("协议转换预览:");
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            println!("  源格式: {from}");
+            println!("  目标格式: {to}");
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            let pretty = serde_json::to_string_pretty(&transformed).unwrap_or_else(|_| "序列化失败".to_string());
+            println!("{pretty}");
+        }
+        Err(e) => {
+            eprintln!("协议转换失败: {from} → {to}: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// proxy-trace: 代理链路跟踪
+fn cmd_proxy_trace(app: &str, model: &str) {
+    let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
+    rt.block_on(async {
+        let status = match cc_switch_core::services::ProxyService::get_status().await {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("错误: 获取代理状态失败: {e}");
+                std::process::exit(1);
+            }
+        };
+        if !status.running {
+            eprintln!("错误: 代理未运行，无法 trace");
+            std::process::exit(1);
+        }
+        println!("代理链路跟踪 ({app}, 模型: {model}):");
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("  代理地址: {}:{}", status.address, status.port);
+        println!("  应用: {app}");
+        println!("  模型: {model}");
+        println!("  跟踪端点: POST http://{}:{}/v1/chat/completions", status.address, status.port);
+        println!();
+        println!("  使用以下 curl 命令发送测试请求:");
+        println!();
+        println!("  curl -s http://{}:{}/v1/chat/completions \\", status.address, status.port);
+        println!("    -H 'Content-Type: application/json' \\");
+        println!("    -d '{{\"model\":\"{}\",\"messages\":[{{\"role\":\"user\",\"content\":\"Hello\"}}],\"max_tokens\":10,\"stream\":false}}' | jq .", model);
+        println!();
+        println!("  查看代理日志:");
+        println!("    tail -f ~/.cc-switch/cc-switch-daemon.log");
+    });
+}
+
+/// replay-request: 重放历史请求
+fn cmd_replay_request(request_id: &str) {
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
+    match db.get_request_detail(request_id) {
+        Ok(Some(detail)) => {
+            println!("请求详情: {}", request_id);
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            println!("  时间: {}", detail.created_at.unwrap_or("?".to_string()));
+            println!("  应用: {}", detail.app_type.unwrap_or("?".to_string()));
+            println!("  模型: {}", detail.model.unwrap_or("?".to_string()));
+            println!();
+            if let Some(body) = &detail.request_body {
+                println!("  请求体:");
+                let pretty = serde_json::to_string_pretty(&serde_json::from_str::<serde_json::Value>(body).unwrap_or(serde_json::Value::String(body.clone())))
+                    .unwrap_or_else(|_| body.clone());
+                println!("{pretty}");
+            } else {
+                eprintln!("  请求体未记录（需 CC_SWITCH_LOG_BODIES=1 环境变量启用）");
+            }
+            println!();
+            println!("  如需重放，将 curl 命令指向你的代理地址:");
+            println!("  curl -s http://127.0.0.1:9090/v1/chat/completions \\");
+            println!("    -H 'Content-Type: application/json' \\");
+            println!("    -d '<以上请求体>'");
+        }
+        Ok(None) => {
+            eprintln!("请求 {request_id} 不存在");
+            std::process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("查询失败: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
 /// help: 列出所有命令
 fn cmd_help() {
     println!("cc-switch-cli — 无头模式管理工具");
@@ -4131,6 +4673,17 @@ fn cmd_help() {
     println!("    speedtest <URL> [--timeout S]");
     println!("    verify-key --base-url U --api-key K");
     println!("    help                        显示此帮助信息");
+    println!("    reload                      热重载代理配置（不重启）");
+    println!("    auth-token [set|clear] [--token T]  设置/清除代理访问令牌");
+    println!("    acl <list|add|remove> [--cidr C]  IP 白名单管理");
+    println!("    smoke-test [APP]             协议转换烟雾测试");
+    println!("    export-yaml <PATH>           导出数据库配置为 YAML");
+    println!("    diff <PATH>                 对比 YAML 与当前配置");
+    println!("    rollback                    回滚到上一个 apply 前备份");
+    println!("    toggle-provider <APP> <ID> <on|off>  启用/禁用供应商");
+    println!("    preview-conversion --from F --to F --payload JSON [--base-url U]");
+    println!("    proxy-trace <APP> --model M  代理链路跟踪指南");
+    println!("    replay-request <REQUEST_ID>  重放历史请求");
     println!();
     println!("  代理核心能力:");
     println!("    sort-providers <APP> --order JSON   调整供应商排序");
