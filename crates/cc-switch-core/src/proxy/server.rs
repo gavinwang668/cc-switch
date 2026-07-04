@@ -65,8 +65,7 @@ impl ProxyServer {
     pub fn new(
         config: ProxyConfig,
         db: Arc<Database>,
-        #[cfg(feature = "tauri")]
-        app_handle: Option<crate::TauriAppHandle>,
+        #[cfg(feature = "tauri")] app_handle: Option<crate::TauriAppHandle>,
     ) -> Self {
         // 创建共享的 ProviderRouter（熔断器状态将跨所有请求保持）
         let provider_router = Arc::new(ProviderRouter::new(db.clone()));

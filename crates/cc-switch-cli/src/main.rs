@@ -807,16 +807,21 @@ fn main() {
         Commands::ProviderStats { days } => cmd_provider_stats(*days),
         Commands::ModelStats { days } => cmd_model_stats(*days),
         Commands::Reload => cmd_reload(),
-        Commands::AuthToken { action, token } => cmd_auth_token(action.as_deref(), token.as_deref()),
+        Commands::AuthToken { action, token } => {
+            cmd_auth_token(action.as_deref(), token.as_deref())
+        }
         Commands::Acl { action, cidr } => cmd_acl(action.as_deref(), cidr.as_deref()),
         Commands::SmokeTest { app } => cmd_smoke_test(app.as_deref()),
         Commands::ExportYaml { path } => cmd_export_yaml(path),
         Commands::Diff { path } => cmd_diff(path),
         Commands::Rollback => cmd_rollback(),
         Commands::ToggleProvider { app, id, enabled } => cmd_toggle_provider(app, id, enabled),
-        Commands::PreviewConversion { from, to, payload, base_url } => {
-            cmd_preview_conversion(from, to, payload, base_url.as_deref())
-        }
+        Commands::PreviewConversion {
+            from,
+            to,
+            payload,
+            base_url,
+        } => cmd_preview_conversion(from, to, payload, base_url.as_deref()),
         Commands::ProxyTrace { app, model } => cmd_proxy_trace(app, model),
         Commands::ReplayRequest { request_id } => cmd_replay_request(request_id),
         Commands::Help => cmd_help(),
@@ -2640,15 +2645,7 @@ fn cmd_read_live(app: String) {
 fn cmd_fetch_models(base_url: &str, api_key: &str, full_url: bool, models_path: Option<&str>) {
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async {
-        match cc_switch_core::fetch_models(
-            base_url,
-            api_key,
-            full_url,
-            models_path,
-            None,
-        )
-        .await
-        {
+        match cc_switch_core::fetch_models(base_url, api_key, full_url, models_path, None).await {
             Ok(models) => {
                 println!("可用模型 ({}):", models.len());
                 for m in &models {
@@ -3830,8 +3827,9 @@ fn cmd_enable_prompt(app: String, id: String, enabled: String) {
                     }
                 };
                 prompt.enabled = false;
-                match cc_switch_core::PromptService::upsert_prompt(&app_state, app_type, &id, prompt)
-                {
+                match cc_switch_core::PromptService::upsert_prompt(
+                    &app_state, app_type, &id, prompt,
+                ) {
                     Ok(_) => println!("Prompt '{id}' 已禁用 ({app})"),
                     Err(e) => {
                         eprintln!("禁用失败: {e}");
@@ -4190,7 +4188,10 @@ fn cmd_reload() {
         }
         // 向运行中代理发送 reload 信号
         let client = match reqwest::Client::new()
-            .post(format!("http://{}:{}/__internal/reload", status.address, status.port))
+            .post(format!(
+                "http://{}:{}/__internal/reload",
+                status.address, status.port
+            ))
             .timeout(std::time::Duration::from_secs(5))
             .send()
             .await
@@ -4239,16 +4240,14 @@ fn cmd_auth_token(action: Option<&str>, token: Option<&str>) {
             }
             println!("✓ 代理访问令牌已清除（代理回到开放状态）");
         }
-        _ => {
-            match db.get_proxy_auth_token() {
-                Ok(Some(t)) => println!("令牌已设置 ({}...)", &t[..t.len().min(8)]),
-                Ok(None) => println!("令牌未设置（代理完全开放）"),
-                Err(e) => {
-                    eprintln!("读取令牌失败: {e}");
-                    std::process::exit(1);
-                }
+        _ => match db.get_proxy_auth_token() {
+            Ok(Some(t)) => println!("令牌已设置 ({}...)", &t[..t.len().min(8)]),
+            Ok(None) => println!("令牌未设置（代理完全开放）"),
+            Err(e) => {
+                eprintln!("读取令牌失败: {e}");
+                std::process::exit(1);
             }
-        }
+        },
     }
 }
 
@@ -4262,24 +4261,22 @@ fn cmd_acl(action: Option<&str>, cidr: Option<&str>) {
         }
     };
     match action {
-        Some("list") => {
-            match db.get_proxy_acl_cidrs() {
-                Ok(cidrs) => {
-                    if cidrs.is_empty() {
-                        println!("IP 白名单未设置（不限制来源 IP）");
-                    } else {
-                        println!("IP 白名单 ({} 条):", cidrs.len());
-                        for c in &cidrs {
-                            println!("  {c}");
-                        }
+        Some("list") => match db.get_proxy_acl_cidrs() {
+            Ok(cidrs) => {
+                if cidrs.is_empty() {
+                    println!("IP 白名单未设置（不限制来源 IP）");
+                } else {
+                    println!("IP 白名单 ({} 条):", cidrs.len());
+                    for c in &cidrs {
+                        println!("  {c}");
                     }
                 }
-                Err(e) => {
-                    eprintln!("读取 ACL 失败: {e}");
-                    std::process::exit(1);
-                }
             }
-        }
+            Err(e) => {
+                eprintln!("读取 ACL 失败: {e}");
+                std::process::exit(1);
+            }
+        },
         Some("add") => {
             let c = match cidr {
                 Some(c) => c.to_string(),
@@ -4427,7 +4424,12 @@ fn cmd_diff(path: &str) {
     let new_count = yaml_config
         .providers
         .iter()
-        .filter(|yp| !db_config.providers.iter().any(|dp| dp.app == yp.app && dp.id == yp.id))
+        .filter(|yp| {
+            !db_config
+                .providers
+                .iter()
+                .any(|dp| dp.app == yp.app && dp.id == yp.id)
+        })
         .count();
     let changed_count = yaml_config
         .providers
@@ -4445,7 +4447,10 @@ fn cmd_diff(path: &str) {
     if changed_count > 0 {
         println!("  变更供应商: {changed_count} 条");
     }
-    if new_count == 0 && changed_count == 0 && yaml_config.providers.len() == db_config.providers.len() {
+    if new_count == 0
+        && changed_count == 0
+        && yaml_config.providers.len() == db_config.providers.len()
+    {
         println!("  ✓ 无差异 — YAML 与数据库配置一致");
     }
 }
@@ -4527,8 +4532,12 @@ fn cmd_preview_conversion(from: &str, to: &str, payload: &str, _base_url: Option
         }
     };
     let result = match (from, to) {
-        ("anthropic", "openai_chat") => cc_switch_core::proxy::providers::transform::anthropic_to_openai(body),
-        ("openai_chat", "anthropic") => cc_switch_core::proxy::providers::transform::openai_to_anthropic(body),
+        ("anthropic", "openai_chat") => {
+            cc_switch_core::proxy::providers::transform::anthropic_to_openai(body)
+        }
+        ("openai_chat", "anthropic") => {
+            cc_switch_core::proxy::providers::transform::openai_to_anthropic(body)
+        }
         _ => {
             eprintln!("错误: 不支持的转换路径: {from} → {to}");
             eprintln!("支持的路径: anthropic → openai_chat, openai_chat → anthropic");

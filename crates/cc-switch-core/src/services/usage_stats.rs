@@ -1700,16 +1700,13 @@ struct PricingInfo {
 
 impl Database {
     /// Recalculate stored zero-cost usage rows once pricing becomes available.
-    pub(crate) fn backfill_missing_usage_costs(&self) -> Result<u64, AppError> {
+    pub fn backfill_missing_usage_costs(&self) -> Result<u64, AppError> {
         let conn = lock_conn!(self.conn);
         Self::backfill_missing_usage_costs_on_conn(&conn, None)
     }
 
     /// 仅回填指定 model_id 相关的零成本行；用于单条定价更新后的精准回填。
-    pub(crate) fn backfill_missing_usage_costs_for_model(
-        &self,
-        model_id: &str,
-    ) -> Result<u64, AppError> {
+    pub fn backfill_missing_usage_costs_for_model(&self, model_id: &str) -> Result<u64, AppError> {
         let conn = lock_conn!(self.conn);
         Self::backfill_missing_usage_costs_on_conn(&conn, Some(model_id))
     }

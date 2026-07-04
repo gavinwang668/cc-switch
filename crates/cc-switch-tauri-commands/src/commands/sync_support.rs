@@ -66,8 +66,9 @@ mod tests {
 
     #[test]
     fn post_sync_warning_from_result_returns_some_on_sync_error() {
-        let warning =
-            post_sync_warning_from_result(Ok(Err(crate::error::AppError::Config("boom".into()))));
+        let warning = post_sync_warning_from_result(Ok(Err(
+            cc_switch_core::error::AppError::Config("boom".into()),
+        )));
         assert!(warning.is_some());
     }
 

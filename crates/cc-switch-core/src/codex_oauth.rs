@@ -4,7 +4,8 @@
 //! 此处提供类型别名，供 service 层和 commands 层共用。
 
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Codex OAuth 认证管理器的共享状态
 ///

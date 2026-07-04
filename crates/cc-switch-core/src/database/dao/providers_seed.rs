@@ -10,7 +10,7 @@
 
 use crate::app_config::AppType;
 
-pub(crate) const CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID: &str = "claude-desktop-official";
+pub const CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID: &str = "claude-desktop-official";
 
 /// 单条官方供应商种子定义。
 pub(crate) struct OfficialProviderSeed {
@@ -73,7 +73,7 @@ pub(crate) const OFFICIAL_SEEDS: &[OfficialProviderSeed] = &[
 /// 判断给定的 provider id 是否属于内置官方种子。
 ///
 /// 单一事实源：直接扫描 `OFFICIAL_SEEDS`，避免在多处重复维护 id 列表。
-pub(crate) fn is_official_seed_id(id: &str) -> bool {
+pub fn is_official_seed_id(id: &str) -> bool {
     OFFICIAL_SEEDS.iter().any(|seed| seed.id == id)
 }
 

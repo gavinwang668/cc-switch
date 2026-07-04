@@ -154,16 +154,16 @@ pub fn import_default_config(state: State<'_, AppState>, app: String) -> Result<
 #[tauri::command]
 pub async fn get_claude_desktop_status(
     state: State<'_, AppState>,
-) -> Result<crate::claude_desktop_config::ClaudeDesktopStatus, String> {
+) -> Result<cc_switch_core::claude_desktop_config::ClaudeDesktopStatus, String> {
     let proxy_running = state.proxy_service.is_running().await;
-    crate::claude_desktop_config::get_status(state.db.as_ref(), proxy_running)
+    cc_switch_core::claude_desktop_config::get_status(state.db.as_ref(), proxy_running)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_claude_desktop_default_routes(
-) -> Vec<crate::claude_desktop_config::ClaudeDesktopDefaultRoute> {
-    crate::claude_desktop_config::default_proxy_routes()
+) -> Vec<cc_switch_core::claude_desktop_config::ClaudeDesktopDefaultRoute> {
+    cc_switch_core::claude_desktop_config::default_proxy_routes()
 }
 
 #[tauri::command]
@@ -189,7 +189,7 @@ pub fn import_claude_desktop_providers_from_claude(
         desktop_provider.in_failover_queue = false;
         let meta = desktop_provider.meta.get_or_insert_with(Default::default);
 
-        if crate::claude_desktop_config::is_compatible_direct_provider(provider)
+        if cc_switch_core::claude_desktop_config::is_compatible_direct_provider(provider)
             && claude_provider_models_are_claude_safe(provider)
         {
             meta.claude_desktop_mode = Some(ClaudeDesktopMode::Direct);
@@ -211,7 +211,7 @@ pub fn import_claude_desktop_providers_from_claude(
     // 用户主动点 import 是"重新整理 ClaudeDesktop 表"的隐式信号，把官方入口补回来。
     // 失败只 warn，不影响 imported 主流程；imported 计数语义保持纯净。
     if let Err(e) = state.db.ensure_official_seed_by_id(
-        crate::database::CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID,
+        cc_switch_core::database::CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID,
         AppType::ClaudeDesktop,
     ) {
         log::warn!("Failed to ensure claude-desktop-official seed during import: {e}");
@@ -225,7 +225,7 @@ pub fn ensure_claude_desktop_official_provider(state: State<'_, AppState>) -> Re
     state
         .db
         .ensure_official_seed_by_id(
-            crate::database::CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID,
+            cc_switch_core::database::CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID,
             AppType::ClaudeDesktop,
         )
         .map_err(|e| e.to_string())
@@ -250,12 +250,12 @@ fn claude_provider_models_are_claude_safe(provider: &Provider) -> bool {
     .filter_map(|key| env.get(key).and_then(|value| value.as_str()))
     .map(str::trim)
     .filter(|value| !value.is_empty())
-    .all(crate::claude_desktop_config::is_claude_safe_model_id)
+    .all(cc_switch_core::claude_desktop_config::is_claude_safe_model_id)
 }
 
 pub(crate) fn suggested_claude_desktop_routes(
     provider: &Provider,
-) -> Option<std::collections::HashMap<String, crate::provider::ClaudeDesktopModelRoute>> {
+) -> Option<std::collections::HashMap<String, cc_switch_core::provider::ClaudeDesktopModelRoute>> {
     let env = provider
         .settings_config
         .get("env")
@@ -270,7 +270,10 @@ pub(crate) fn suggested_claude_desktop_routes(
     );
 
     fn add_route(
-        routes: &mut std::collections::HashMap<String, crate::provider::ClaudeDesktopModelRoute>,
+        routes: &mut std::collections::HashMap<
+            String,
+            cc_switch_core::provider::ClaudeDesktopModelRoute,
+        >,
         env: &serde_json::Map<String, serde_json::Value>,
         route_key: &str,
         env_key: &str,
@@ -287,7 +290,7 @@ pub(crate) fn suggested_claude_desktop_routes(
 
         // Claude 端 env 值可能带 [1M] 后缀；Claude Desktop schema 不接受后缀，
         // 改用 supports1m 字段表达 1M 能力。在 import 边界做单向翻译。
-        let marker = crate::claude_desktop_config::ONE_M_CONTEXT_MARKER.as_bytes();
+        let marker = cc_switch_core::claude_desktop_config::ONE_M_CONTEXT_MARKER.as_bytes();
         let raw_bytes = raw_model.as_bytes();
         let has_1m_marker = raw_bytes.len() >= marker.len()
             && raw_bytes[raw_bytes.len() - marker.len()..].eq_ignore_ascii_case(marker);
@@ -307,7 +310,7 @@ pub(crate) fn suggested_claude_desktop_routes(
             .filter(|value| !value.is_empty())
             .map(str::to_string);
         let label_override = explicit_label_override.clone().or_else(|| {
-            (!crate::claude_desktop_config::is_claude_safe_model_id(stripped_model))
+            (!cc_switch_core::claude_desktop_config::is_claude_safe_model_id(stripped_model))
                 .then(|| stripped_model.to_string())
         });
 
@@ -319,7 +322,7 @@ pub(crate) fn suggested_claude_desktop_routes(
                 || existing == Some(stripped_model)
         };
 
-        let merge_into = |existing: &mut crate::provider::ClaudeDesktopModelRoute| {
+        let merge_into = |existing: &mut cc_switch_core::provider::ClaudeDesktopModelRoute| {
             let merged = existing.supports_1m.unwrap_or(false) || effective_supports_1m;
             existing.supports_1m = Some(merged);
             if should_overwrite(existing.label_override.as_deref()) {
@@ -338,14 +341,14 @@ pub(crate) fn suggested_claude_desktop_routes(
         routes
             .entry(route_key.to_string())
             .and_modify(merge_into)
-            .or_insert_with(|| crate::provider::ClaudeDesktopModelRoute {
+            .or_insert_with(|| cc_switch_core::provider::ClaudeDesktopModelRoute {
                 model: stripped_model.to_string(),
                 label_override,
                 supports_1m: Some(effective_supports_1m),
             });
     }
 
-    for spec in crate::claude_desktop_config::DEFAULT_PROXY_ROUTES {
+    for spec in cc_switch_core::claude_desktop_config::DEFAULT_PROXY_ROUTES {
         add_route(
             &mut routes,
             env,
@@ -357,7 +360,7 @@ pub(crate) fn suggested_claude_desktop_routes(
 
     // 三个 default env_key 全空时用 ANTHROPIC_MODEL 派生兜底路由。
     if routes.is_empty() {
-        let primary_route = crate::claude_desktop_config::DEFAULT_PROXY_ROUTES[0].route_id;
+        let primary_route = cc_switch_core::claude_desktop_config::DEFAULT_PROXY_ROUTES[0].route_id;
         add_route(
             &mut routes,
             env,
@@ -378,7 +381,7 @@ pub async fn queryProviderUsage(
     copilot_state: State<'_, CopilotAuthState>,
     #[allow(non_snake_case)] providerId: String, // 使用 camelCase 匹配前端
     app: String,
-) -> Result<crate::provider::UsageResult, String> {
+) -> Result<cc_switch_core::provider::UsageResult, String> {
     let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
     // inner 可能以两种形式失败：
     //   1) 返回 Ok(UsageResult { success: false, .. }) —— 业务失败（401、脚本报错等）
@@ -390,7 +393,7 @@ pub async fn queryProviderUsage(
         query_provider_usage_inner(&state, &copilot_state, app_type.clone(), &providerId).await;
     let snapshot = match &inner {
         Ok(r) => r.clone(),
-        Err(err_msg) => crate::provider::UsageResult {
+        Err(err_msg) => cc_switch_core::provider::UsageResult {
             success: false,
             data: None,
             error: Some(err_msg.clone()),
@@ -406,7 +409,7 @@ pub async fn queryProviderUsage(
         log::error!("emit usage-cache-updated (script) 失败: {e}");
     }
     state.usage_cache.put_script(app_type, providerId, snapshot);
-    crate::tray::schedule_tray_refresh(&app_handle);
+    cc_switch_core::tray::schedule_tray_refresh(&app_handle);
     inner
 }
 
@@ -421,7 +424,7 @@ fn resolve_native_credentials(app_type: &AppType, provider: Option<&Provider>) -
 fn resolve_coding_plan_credentials(
     app_type: &AppType,
     provider: Option<&Provider>,
-    usage_script: Option<&crate::provider::UsageScript>,
+    usage_script: Option<&cc_switch_core::provider::UsageScript>,
 ) -> (String, String) {
     let is_zenmux = usage_script
         .and_then(|s| s.coding_plan_provider.as_deref())
@@ -459,7 +462,7 @@ async fn query_provider_usage_inner(
     copilot_state: &CopilotAuthState,
     app_type: AppType,
     provider_id: &str,
-) -> Result<crate::provider::UsageResult, String> {
+) -> Result<cc_switch_core::provider::UsageResult, String> {
     // 从数据库读取供应商信息，检查特殊模板类型
     let providers = state
         .db
@@ -479,7 +482,7 @@ async fn query_provider_usage_inner(
             .and_then(|p| p.meta.as_ref())
             .and_then(|m| m.managed_account_id_for(TEMPLATE_TYPE_GITHUB_COPILOT));
 
-        let auth_manager = copilot_state.0.read().await;
+        let auth_manager = copilot_state.read().await;
         let usage = match copilot_account_id.as_deref() {
             Some(account_id) => auth_manager
                 .fetch_usage_for_account(account_id)
@@ -493,9 +496,9 @@ async fn query_provider_usage_inner(
         let premium = &usage.quota_snapshots.premium_interactions;
         let used = premium.entitlement - premium.remaining;
 
-        return Ok(crate::provider::UsageResult {
+        return Ok(cc_switch_core::provider::UsageResult {
             success: true,
-            data: Some(vec![crate::provider::UsageData {
+            data: Some(vec![cc_switch_core::provider::UsageData {
                 plan_name: Some(usage.copilot_plan),
                 remaining: Some(premium.remaining as f64),
                 total: Some(premium.entitlement as f64),
@@ -519,7 +522,7 @@ async fn query_provider_usage_inner(
         let access_key_id = usage_script.and_then(|s| s.access_key_id.clone());
         let secret_access_key = usage_script.and_then(|s| s.secret_access_key.clone());
 
-        let quota = crate::services::coding_plan::get_coding_plan_quota(
+        let quota = cc_switch_core::services::coding_plan::get_coding_plan_quota(
             &base_url,
             &api_key,
             access_key_id.as_deref(),
@@ -530,7 +533,7 @@ async fn query_provider_usage_inner(
 
         // 将 SubscriptionQuota 转换为 UsageResult
         if !quota.success {
-            return Ok(crate::provider::UsageResult {
+            return Ok(cc_switch_core::provider::UsageResult {
                 success: false,
                 data: None,
                 error: quota.error,
@@ -550,7 +553,7 @@ async fn query_provider_usage_inner(
             .map(|tier| format!("ZenMux·{}", tier.to_uppercase()));
         let mut first_tier = true;
 
-        let data: Vec<crate::provider::UsageData> = quota
+        let data: Vec<cc_switch_core::provider::UsageData> = quota
             .tiers
             .iter()
             .map(|tier| {
@@ -577,7 +580,7 @@ async fn query_provider_usage_inner(
                 } else {
                     tier.resets_at.clone()
                 };
-                crate::provider::UsageData {
+                cc_switch_core::provider::UsageData {
                     plan_name: Some(tier.name.clone()),
                     remaining: Some(remaining),
                     total: Some(total),
@@ -590,7 +593,7 @@ async fn query_provider_usage_inner(
             })
             .collect();
 
-        return Ok(crate::provider::UsageResult {
+        return Ok(cc_switch_core::provider::UsageResult {
             success: true,
             data: if data.is_empty() { None } else { Some(data) },
             error: None,
@@ -602,7 +605,7 @@ async fn query_provider_usage_inner(
         // 按 app 区分的凭据存储格式提取 Base URL 与 API Key
         let (base_url, api_key) = resolve_native_credentials(&app_type, provider);
 
-        return crate::services::balance::get_balance(&base_url, &api_key)
+        return cc_switch_core::services::balance::get_balance(&base_url, &api_key)
             .await
             .map_err(|e| format!("Failed to query balance: {e}"));
     }
@@ -610,29 +613,30 @@ async fn query_provider_usage_inner(
     // ── 官方订阅额度查询路径 ──
     if template_type == TEMPLATE_TYPE_OFFICIAL_SUBSCRIPTION {
         if !usage_script.map(|s| s.enabled).unwrap_or(false) {
-            return Ok(crate::provider::UsageResult {
+            return Ok(cc_switch_core::provider::UsageResult {
                 success: false,
                 data: None,
                 error: Some("Usage query is disabled".to_string()),
             });
         }
 
-        let quota = crate::services::subscription::get_subscription_quota(app_type.as_str())
-            .await
-            .map_err(|e| format!("Failed to query subscription quota: {e}"))?;
+        let quota =
+            cc_switch_core::services::subscription::get_subscription_quota(app_type.as_str())
+                .await
+                .map_err(|e| format!("Failed to query subscription quota: {e}"))?;
 
         if !quota.success {
-            return Ok(crate::provider::UsageResult {
+            return Ok(cc_switch_core::provider::UsageResult {
                 success: false,
                 data: None,
                 error: quota.error.or(quota.credential_message),
             });
         }
 
-        let data: Vec<crate::provider::UsageData> = quota
+        let data: Vec<cc_switch_core::provider::UsageData> = quota
             .tiers
             .iter()
-            .map(|tier| crate::provider::UsageData {
+            .map(|tier| cc_switch_core::provider::UsageData {
                 plan_name: Some(tier.name.clone()),
                 remaining: Some(100.0 - tier.utilization),
                 total: Some(100.0),
@@ -644,7 +648,7 @@ async fn query_provider_usage_inner(
             })
             .collect();
 
-        return Ok(crate::provider::UsageResult {
+        return Ok(cc_switch_core::provider::UsageResult {
             success: true,
             data: if data.is_empty() { None } else { Some(data) },
             error: None,
@@ -671,7 +675,7 @@ pub async fn testUsageScript(
     #[allow(non_snake_case)] accessToken: Option<String>,
     #[allow(non_snake_case)] userId: Option<String>,
     #[allow(non_snake_case)] templateType: Option<String>,
-) -> Result<crate::provider::UsageResult, String> {
+) -> Result<cc_switch_core::provider::UsageResult, String> {
     let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
     ProviderService::test_usage_script(
         state.inner(),
@@ -780,7 +784,7 @@ pub fn get_custom_endpoints(
     state: State<'_, AppState>,
     app: String,
     #[allow(non_snake_case)] providerId: String,
-) -> Result<Vec<crate::settings::CustomEndpoint>, String> {
+) -> Result<Vec<cc_switch_core::settings::CustomEndpoint>, String> {
     let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
     ProviderService::get_custom_endpoints(state.inner(), app_type, &providerId)
         .map_err(|e| e.to_string())
@@ -912,13 +916,13 @@ pub fn sync_universal_provider(
 
 #[tauri::command]
 pub fn import_opencode_providers_from_live(state: State<'_, AppState>) -> Result<usize, String> {
-    crate::services::provider::import_opencode_providers_from_live(state.inner())
+    cc_switch_core::services::provider::import_opencode_providers_from_live(state.inner())
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_opencode_live_provider_ids() -> Result<Vec<String>, String> {
-    crate::opencode_config::get_providers()
+    cc_switch_core::opencode_config::get_providers()
         .map(|providers| providers.keys().cloned().collect())
         .map_err(|e| e.to_string())
 }

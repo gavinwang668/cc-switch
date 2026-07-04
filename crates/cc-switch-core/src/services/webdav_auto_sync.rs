@@ -17,7 +17,7 @@ pub(crate) const MAX_AUTO_SYNC_WAIT_MS: u64 = 10_000;
 static DB_CHANGE_TX: OnceLock<Sender<String>> = OnceLock::new();
 static AUTO_SYNC_SUPPRESS_DEPTH: AtomicUsize = AtomicUsize::new(0);
 
-pub(crate) struct AutoSyncSuppressionGuard;
+pub struct AutoSyncSuppressionGuard;
 
 impl AutoSyncSuppressionGuard {
     pub fn new() -> Self {
@@ -92,6 +92,7 @@ fn emit_auto_sync_status_updated(
 ) {
     #[cfg(feature = "tauri")]
     {
+        use tauri::Emitter;
         let Some(app) = app else {
             return;
         };

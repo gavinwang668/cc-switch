@@ -127,7 +127,7 @@ pub fn get_model_pricing(state: State<'_, AppState>) -> Result<Vec<ModelPricingI
     state.db.ensure_model_pricing_seeded()?;
 
     let db = state.db.clone();
-    let conn = crate::database::lock_conn!(db.conn);
+    let conn = cc_switch_core::database::lock_conn!(db.conn);
 
     // 检查表是否存在
     let table_exists: bool = conn
@@ -222,7 +222,7 @@ pub fn update_model_pricing(
     }
 
     {
-        let conn = crate::database::lock_conn!(db.conn);
+        let conn = cc_switch_core::database::lock_conn!(db.conn);
         conn.execute(
             "INSERT OR REPLACE INTO model_pricing (
                 model_id, display_name, input_cost_per_million, output_cost_per_million,
@@ -253,7 +253,7 @@ pub fn check_provider_limits(
     state: State<'_, AppState>,
     provider_id: String,
     app_type: String,
-) -> Result<crate::services::usage_stats::ProviderLimitStatus, AppError> {
+) -> Result<cc_switch_core::services::usage_stats::ProviderLimitStatus, AppError> {
     state.db.check_provider_limits(&provider_id, &app_type)
 }
 
@@ -261,7 +261,7 @@ pub fn check_provider_limits(
 #[tauri::command]
 pub fn delete_model_pricing(state: State<'_, AppState>, model_id: String) -> Result<(), AppError> {
     let db = state.db.clone();
-    let conn = crate::database::lock_conn!(db.conn);
+    let conn = cc_switch_core::database::lock_conn!(db.conn);
 
     conn.execute(
         "DELETE FROM model_pricing WHERE model_id = ?1",
@@ -277,12 +277,12 @@ pub fn delete_model_pricing(state: State<'_, AppState>, model_id: String) -> Res
 #[tauri::command]
 pub fn sync_session_usage(
     state: State<'_, AppState>,
-) -> Result<crate::services::session_usage::SessionSyncResult, AppError> {
+) -> Result<cc_switch_core::services::session_usage::SessionSyncResult, AppError> {
     // 同步 Claude 会话日志
-    let mut result = crate::services::session_usage::sync_claude_session_logs(&state.db)?;
+    let mut result = cc_switch_core::services::session_usage::sync_claude_session_logs(&state.db)?;
 
     // 同步 Codex 使用数据
-    match crate::services::session_usage_codex::sync_codex_usage(&state.db) {
+    match cc_switch_core::services::session_usage_codex::sync_codex_usage(&state.db) {
         Ok(codex_result) => {
             result.imported += codex_result.imported;
             result.skipped += codex_result.skipped;
@@ -295,7 +295,7 @@ pub fn sync_session_usage(
     }
 
     // 同步 Gemini 使用数据
-    match crate::services::session_usage_gemini::sync_gemini_usage(&state.db) {
+    match cc_switch_core::services::session_usage_gemini::sync_gemini_usage(&state.db) {
         Ok(gemini_result) => {
             result.imported += gemini_result.imported;
             result.skipped += gemini_result.skipped;
@@ -308,7 +308,7 @@ pub fn sync_session_usage(
     }
 
     // 同步 OpenCode 使用数据
-    match crate::services::session_usage_opencode::sync_opencode_usage(&state.db) {
+    match cc_switch_core::services::session_usage_opencode::sync_opencode_usage(&state.db) {
         Ok(opencode_result) => {
             result.imported += opencode_result.imported;
             result.skipped += opencode_result.skipped;
@@ -327,8 +327,8 @@ pub fn sync_session_usage(
 #[tauri::command]
 pub fn get_usage_data_sources(
     state: State<'_, AppState>,
-) -> Result<Vec<crate::services::session_usage::DataSourceSummary>, AppError> {
-    crate::services::session_usage::get_data_source_breakdown(&state.db)
+) -> Result<Vec<cc_switch_core::services::session_usage::DataSourceSummary>, AppError> {
+    cc_switch_core::services::session_usage::get_data_source_breakdown(&state.db)
 }
 
 /// 模型定价信息

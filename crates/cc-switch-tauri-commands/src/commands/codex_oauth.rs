@@ -7,7 +7,9 @@
 
 use cc_switch_core::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use cc_switch_core::services::model_fetch::FetchedModel;
-use cc_switch_core::services::subscription::{query_codex_quota, CredentialStatus, SubscriptionQuota};
+use cc_switch_core::services::subscription::{
+    query_codex_quota, CredentialStatus, SubscriptionQuota,
+};
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
@@ -26,7 +28,7 @@ pub async fn get_codex_oauth_quota(
     account_id: Option<String>,
     state: State<'_, CodexOAuthState>,
 ) -> Result<SubscriptionQuota, String> {
-    let manager = state.0.read().await;
+    let manager = state.inner().read().await;
 
     // 解析最终使用的账号 ID：显式 > 默认账号 > 无账号 (not_found)
     let resolved = match account_id {
@@ -68,7 +70,7 @@ pub async fn get_codex_oauth_models(
     account_id: Option<String>,
     state: State<'_, CodexOAuthState>,
 ) -> Result<Vec<FetchedModel>, String> {
-    let manager = state.0.read().await;
+    let manager = state.inner().read().await;
     let resolved = match account_id
         .as_deref()
         .map(str::trim)
@@ -86,5 +88,5 @@ pub async fn get_codex_oauth_models(
         .await
         .map_err(|e| format!("Codex OAuth token unavailable: {e}"))?;
 
-    crate::services::codex_oauth_models::fetch_models_with_token(&token, &id).await
+    cc_switch_core::services::codex_oauth_models::fetch_models_with_token(&token, &id).await
 }

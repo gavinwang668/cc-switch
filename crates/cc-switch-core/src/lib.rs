@@ -19,6 +19,12 @@ pub use tauri::AppHandle as TauriAppHandle;
 #[derive(Clone, Debug, Default)]
 pub struct TauriAppHandle;
 
+// Tauri 专属桩模块：完整实现在 src-tauri/，core 仅提供编译所需的占位
+#[cfg(feature = "tauri")]
+pub mod app_store;
+#[cfg(feature = "tauri")]
+pub mod tray;
+
 pub mod app_config;
 pub mod claude_desktop_config;
 pub mod claude_mcp;

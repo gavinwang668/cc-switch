@@ -295,7 +295,7 @@ impl Database {
     }
 
     /// Periodic backup: create a new backup if the latest one is older than the configured interval
-    pub(crate) fn periodic_backup_if_needed(&self) -> Result<(), AppError> {
+    pub fn periodic_backup_if_needed(&self) -> Result<(), AppError> {
         let interval_hours = crate::settings::effective_backup_interval_hours();
         if interval_hours > 0 {
             let backup_dir = get_app_config_dir().join("backups");
@@ -357,7 +357,7 @@ impl Database {
     }
 
     /// 生成一致性快照备份，返回备份文件路径（不存在主库时返回 None）
-    pub(crate) fn backup_database_file(&self) -> Result<Option<PathBuf>, AppError> {
+    pub fn backup_database_file(&self) -> Result<Option<PathBuf>, AppError> {
         let db_path = get_app_config_dir().join("cc-switch.db");
         if !db_path.exists() {
             return Ok(None);

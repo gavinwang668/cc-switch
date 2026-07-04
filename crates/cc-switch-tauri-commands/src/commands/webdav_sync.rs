@@ -117,7 +117,8 @@ pub async fn webdav_sync_download(state: State<'_, AppState>) -> Result<Value, S
     let db = state.db.clone();
     let db_for_sync = db.clone();
     let mut settings = require_enabled_webdav_settings()?;
-    let _auto_sync_suppression = crate::services::webdav_auto_sync::AutoSyncSuppressionGuard::new();
+    let _auto_sync_suppression =
+        cc_switch_core::services::webdav_auto_sync::AutoSyncSuppressionGuard::new();
 
     let sync_result = run_with_webdav_lock(webdav_sync_service::download(&db, &mut settings)).await;
     let mut result = map_sync_result(sync_result, |error| {
@@ -269,7 +270,7 @@ mod tests {
         std::fs::create_dir_all(&test_home).expect("create test home");
         std::env::set_var("CC_SWITCH_TEST_HOME", &test_home);
 
-        crate::settings::update_settings(AppSettings::default()).expect("reset settings");
+        cc_switch_core::settings::update_settings(AppSettings::default()).expect("reset settings");
         let mut current = WebDavSyncSettings {
             enabled: true,
             base_url: "https://dav.example.com/dav/".to_string(),
@@ -279,16 +280,17 @@ mod tests {
             profile: "default".to_string(),
             ..WebDavSyncSettings::default()
         };
-        crate::settings::set_webdav_sync_settings(Some(current.clone()))
+        cc_switch_core::settings::set_webdav_sync_settings(Some(current.clone()))
             .expect("seed webdav settings");
 
         persist_sync_error(
             &mut current,
-            &crate::error::AppError::Config("boom".to_string()),
+            &cc_switch_core::error::AppError::Config("boom".to_string()),
             "manual",
         );
 
-        let after = crate::settings::get_webdav_sync_settings().expect("read webdav settings");
+        let after =
+            cc_switch_core::settings::get_webdav_sync_settings().expect("read webdav settings");
         assert_eq!(after.base_url, "https://dav.example.com/dav/");
         assert_eq!(after.username, "alice");
         assert_eq!(after.password, "secret");
@@ -314,8 +316,8 @@ mod tests {
         std::fs::create_dir_all(&test_home).expect("create test home");
         std::env::set_var("CC_SWITCH_TEST_HOME", &test_home);
 
-        crate::settings::update_settings(AppSettings::default()).expect("reset settings");
-        crate::settings::set_webdav_sync_settings(Some(WebDavSyncSettings {
+        cc_switch_core::settings::update_settings(AppSettings::default()).expect("reset settings");
+        cc_switch_core::settings::set_webdav_sync_settings(Some(WebDavSyncSettings {
             enabled: false,
             base_url: "https://dav.example.com/dav/".to_string(),
             username: "alice".to_string(),
@@ -339,8 +341,8 @@ mod tests {
         std::fs::create_dir_all(&test_home).expect("create test home");
         std::env::set_var("CC_SWITCH_TEST_HOME", &test_home);
 
-        crate::settings::update_settings(AppSettings::default()).expect("reset settings");
-        crate::settings::set_webdav_sync_settings(Some(WebDavSyncSettings {
+        cc_switch_core::settings::update_settings(AppSettings::default()).expect("reset settings");
+        cc_switch_core::settings::set_webdav_sync_settings(Some(WebDavSyncSettings {
             enabled: true,
             base_url: "https://dav.example.com/dav/".to_string(),
             username: "alice".to_string(),

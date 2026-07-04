@@ -391,9 +391,8 @@ impl Database {
             return Ok(());
         }
         for c in cidrs {
-            c.parse::<ipnet::IpNet>().map_err(|e| {
-                AppError::Config(format!("非法 CIDR '{c}': {e}"))
-            })?;
+            c.parse::<ipnet::IpNet>()
+                .map_err(|e| AppError::Config(format!("非法 CIDR '{c}': {e}")))?;
         }
         let json = serde_json::to_string(cidrs)
             .map_err(|e| AppError::Database(format!("序列化 ACL 失败: {e}")))?;

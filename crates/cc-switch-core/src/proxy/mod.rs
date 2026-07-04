@@ -9,7 +9,7 @@ pub(crate) mod content_encoding;
 pub mod copilot_optimizer;
 pub mod error;
 pub mod error_mapper;
-pub(crate) mod failover_switch;
+pub mod failover_switch;
 mod forwarder;
 pub mod gemini_url;
 pub mod handler_config;
@@ -18,6 +18,7 @@ mod handlers;
 mod health;
 pub mod http_client;
 pub mod hyper_client;
+pub mod ingress_auth;
 pub(crate) mod json_canonical;
 pub mod log_codes;
 pub mod media_sanitizer;
@@ -28,6 +29,7 @@ pub mod response_handler;
 pub mod response_processor;
 pub mod server;
 pub mod session;
+pub mod smoke_test;
 pub(crate) mod sse;
 pub(crate) mod switch_lock;
 pub mod thinking_budget_rectifier;
@@ -35,8 +37,6 @@ pub mod thinking_optimizer;
 pub mod thinking_rectifier;
 pub mod types;
 pub mod usage;
-pub mod ingress_auth;
-pub mod smoke_test;
 
 // 公开导出给外部使用（commands, services等模块需要）
 #[allow(unused_imports)]

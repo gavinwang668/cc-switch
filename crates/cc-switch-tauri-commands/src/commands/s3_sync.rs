@@ -109,7 +109,8 @@ pub async fn s3_sync_download(state: State<'_, AppState>) -> Result<Value, Strin
     let db = state.db.clone();
     let db_for_sync = db.clone();
     let mut settings = require_enabled_s3_settings()?;
-    let _auto_sync_suppression = crate::services::s3_auto_sync::AutoSyncSuppressionGuard::new();
+    let _auto_sync_suppression =
+        cc_switch_core::services::s3_auto_sync::AutoSyncSuppressionGuard::new();
 
     let sync_result = run_with_s3_lock(s3_sync_service::download(&db, &mut settings)).await;
     let mut result = map_sync_result(sync_result, |error| {
@@ -262,7 +263,7 @@ mod tests {
         std::fs::create_dir_all(&test_home).expect("create test home");
         std::env::set_var("CC_SWITCH_TEST_HOME", &test_home);
 
-        crate::settings::update_settings(AppSettings::default()).expect("reset settings");
+        cc_switch_core::settings::update_settings(AppSettings::default()).expect("reset settings");
         let mut current = S3SyncSettings {
             enabled: true,
             region: "us-east-1".to_string(),
@@ -273,15 +274,16 @@ mod tests {
             profile: "default".to_string(),
             ..S3SyncSettings::default()
         };
-        crate::settings::set_s3_sync_settings(Some(current.clone())).expect("seed s3 settings");
+        cc_switch_core::settings::set_s3_sync_settings(Some(current.clone()))
+            .expect("seed s3 settings");
 
         persist_sync_error(
             &mut current,
-            &crate::error::AppError::Config("boom".to_string()),
+            &cc_switch_core::error::AppError::Config("boom".to_string()),
             "manual",
         );
 
-        let after = crate::settings::get_s3_sync_settings().expect("read s3 settings");
+        let after = cc_switch_core::settings::get_s3_sync_settings().expect("read s3 settings");
         assert_eq!(after.region, "us-east-1");
         assert_eq!(after.bucket, "my-bucket");
         assert_eq!(after.access_key_id, "AKID");
@@ -308,8 +310,8 @@ mod tests {
         std::fs::create_dir_all(&test_home).expect("create test home");
         std::env::set_var("CC_SWITCH_TEST_HOME", &test_home);
 
-        crate::settings::update_settings(AppSettings::default()).expect("reset settings");
-        crate::settings::set_s3_sync_settings(Some(S3SyncSettings {
+        cc_switch_core::settings::update_settings(AppSettings::default()).expect("reset settings");
+        cc_switch_core::settings::set_s3_sync_settings(Some(S3SyncSettings {
             enabled: false,
             region: "us-east-1".to_string(),
             bucket: "my-bucket".to_string(),
@@ -334,8 +336,8 @@ mod tests {
         std::fs::create_dir_all(&test_home).expect("create test home");
         std::env::set_var("CC_SWITCH_TEST_HOME", &test_home);
 
-        crate::settings::update_settings(AppSettings::default()).expect("reset settings");
-        crate::settings::set_s3_sync_settings(Some(S3SyncSettings {
+        cc_switch_core::settings::update_settings(AppSettings::default()).expect("reset settings");
+        cc_switch_core::settings::set_s3_sync_settings(Some(S3SyncSettings {
             enabled: true,
             region: "us-east-1".to_string(),
             bucket: "my-bucket".to_string(),

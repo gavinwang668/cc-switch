@@ -15,11 +15,7 @@ pub struct SmokeTestResult {
 }
 
 /// 运行单个协议的烟雾测试
-pub fn run_smoke_test(
-    from_fmt: &str,
-    to_fmt: &str,
-    model: &str,
-) -> SmokeTestResult {
+pub fn run_smoke_test(from_fmt: &str, to_fmt: &str, model: &str) -> SmokeTestResult {
     let body = minimal_body(from_fmt, model);
 
     if from_fmt == to_fmt {

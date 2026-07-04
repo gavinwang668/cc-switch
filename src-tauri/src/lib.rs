@@ -1004,7 +1004,8 @@ pub fn run() {
 
                 let app_config_dir = crate::config::get_app_config_dir();
                 let copilot_auth_manager = CopilotAuthManager::new(app_config_dir);
-                app.manage(CopilotAuthState(Arc::new(RwLock::new(copilot_auth_manager))));
+                let copilot_state: CopilotAuthState = Arc::new(RwLock::new(copilot_auth_manager));
+                app.manage(copilot_state);
                 log::info!("✓ CopilotAuthManager initialized");
             }
 
@@ -1016,7 +1017,8 @@ pub fn run() {
 
                 let app_config_dir = crate::config::get_app_config_dir();
                 let codex_oauth_manager = CodexOAuthManager::new(app_config_dir);
-                app.manage(CodexOAuthState(Arc::new(RwLock::new(codex_oauth_manager))));
+                let codex_state: CodexOAuthState = Arc::new(RwLock::new(codex_oauth_manager));
+                app.manage(codex_state);
                 log::info!("✓ CodexOAuthManager initialized");
             }
 

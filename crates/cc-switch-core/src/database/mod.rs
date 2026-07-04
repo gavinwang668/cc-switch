@@ -23,7 +23,7 @@
 //!     └── settings.rs
 //! ```
 
-pub(crate) mod backup;
+pub mod backup;
 mod dao;
 mod migration;
 mod schema;
@@ -32,7 +32,7 @@ mod schema;
 mod tests;
 
 // DAO 类型导出供外部使用
-pub(crate) use dao::providers_seed::{is_official_seed_id, CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID};
+pub use dao::providers_seed::{is_official_seed_id, CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID};
 pub(crate) use dao::proxy::{
     validate_cost_multiplier, validate_pricing_source, PRICING_SOURCE_REQUEST,
     PRICING_SOURCE_RESPONSE,
@@ -49,7 +49,7 @@ use std::sync::Mutex;
 
 /// 当前 Schema 版本号
 /// 每次修改表结构时递增，并在 schema.rs 中添加相应的迁移逻辑
-pub(crate) const SCHEMA_VERSION: i32 = 11;
+pub const SCHEMA_VERSION: i32 = 11;
 
 /// 安全地序列化 JSON，避免 unwrap panic
 pub(crate) fn to_json_string<T: Serialize>(value: &T) -> Result<String, AppError> {
@@ -58,23 +58,24 @@ pub(crate) fn to_json_string<T: Serialize>(value: &T) -> Result<String, AppError
 }
 
 /// 安全地获取 Mutex 锁，避免 unwrap panic
+#[macro_export]
 macro_rules! lock_conn {
     ($mutex:expr) => {
         $mutex
             .lock()
-            .map_err(|e| AppError::Database(format!("Mutex lock failed: {}", e)))?
+            .map_err(|e| $crate::error::AppError::Database(format!("Mutex lock failed: {}", e)))?
     };
 }
 
 // 导出宏供子模块使用
-pub(crate) use lock_conn;
+pub use lock_conn;
 
 /// 数据库连接封装
 ///
 /// 使用 Mutex 包装 Connection 以支持在多线程环境（如 Tauri State）中共享。
 /// rusqlite::Connection 本身不是 Sync 的，因此需要这层包装。
 pub struct Database {
-    pub(crate) conn: Mutex<Connection>,
+    pub conn: Mutex<Connection>,
 }
 
 fn register_db_change_hook(conn: &Connection) {

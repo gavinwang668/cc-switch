@@ -19,7 +19,7 @@ pub async fn get_subscription_quota(
     state: State<'_, AppState>,
     tool: String,
 ) -> Result<SubscriptionQuota, String> {
-    let inner = crate::services::subscription::get_subscription_quota(&tool).await;
+    let inner = cc_switch_core::services::subscription::get_subscription_quota(&tool).await;
     let snapshot = match &inner {
         Ok(q) => q.clone(),
         // transport 层 Err —— 凭据状态不明，用 Valid 表达"凭据没问题，是通信/parse 出错"。

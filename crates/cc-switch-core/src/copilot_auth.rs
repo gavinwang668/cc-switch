@@ -7,7 +7,8 @@
 //! Service 层直接使用 `&CopilotAuthState`。
 
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Copilot 认证管理器的共享状态
 ///

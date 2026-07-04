@@ -79,21 +79,21 @@ pub async fn is_portable_mode() -> Result<bool, String> {
 /// 用于前端在早期主动拉取，避免事件订阅竞态导致的提示缺失。
 #[tauri::command]
 pub async fn get_init_error() -> Result<Option<InitErrorPayload>, String> {
-    Ok(crate::init_status::get_init_error())
+    Ok(cc_switch_core::init_status::get_init_error())
 }
 
 /// 获取 JSON→SQLite 迁移结果（若有）。
 /// 只返回一次 true，之后返回 false，用于前端显示一次性 Toast 通知。
 #[tauri::command]
 pub async fn get_migration_result() -> Result<bool, String> {
-    Ok(crate::init_status::take_migration_success())
+    Ok(cc_switch_core::init_status::take_migration_success())
 }
 
 /// 获取 Skills 自动导入（SSOT）迁移结果（若有）。
 /// 只返回一次 Some({count})，之后返回 None，用于前端显示一次性 Toast 通知。
 #[tauri::command]
 pub async fn get_skills_migration_result() -> Result<Option<SkillsMigrationPayload>, String> {
-    Ok(crate::init_status::take_skills_migration_result())
+    Ok(cc_switch_core::init_status::take_skills_migration_result())
 }
 
 #[derive(serde::Serialize)]
@@ -725,7 +725,7 @@ async fn get_single_tool_version_impl(
     let (env_type, wsl_distro) = tool_env_type_and_wsl_distro(tool);
 
     // 使用全局 HTTP 客户端（已包含代理配置）
-    let client = crate::proxy::http_client::get();
+    let client = cc_switch_core::proxy::http_client::get();
 
     // 1. 获取本地版本
     let probe = if let Some(distro) = wsl_distro.as_deref() {
@@ -2541,12 +2541,12 @@ pub async fn probe_tool_installations(
 #[cfg(target_os = "windows")]
 fn wsl_distro_for_tool(tool: &str) -> Option<String> {
     let override_dir = match tool {
-        "claude" => crate::settings::get_claude_override_dir(),
-        "codex" => crate::settings::get_codex_override_dir(),
-        "gemini" => crate::settings::get_gemini_override_dir(),
-        "opencode" => crate::settings::get_opencode_override_dir(),
-        "openclaw" => crate::settings::get_openclaw_override_dir(),
-        "hermes" => crate::settings::get_hermes_override_dir(),
+        "claude" => cc_switch_core::settings::get_claude_override_dir(),
+        "codex" => cc_switch_core::settings::get_codex_override_dir(),
+        "gemini" => cc_switch_core::settings::get_gemini_override_dir(),
+        "opencode" => cc_switch_core::settings::get_opencode_override_dir(),
+        "openclaw" => cc_switch_core::settings::get_openclaw_override_dir(),
+        "hermes" => cc_switch_core::settings::get_hermes_override_dir(),
         _ => None,
     }?;
 
@@ -2585,7 +2585,7 @@ fn wsl_distro_from_path(path: &Path) -> Option<String> {
 #[allow(non_snake_case)]
 #[tauri::command]
 pub async fn open_provider_terminal(
-    state: State<'_, crate::store::AppState>,
+    state: State<'_, cc_switch_core::store::AppState>,
     app: String,
     #[allow(non_snake_case)] providerId: String,
     cwd: Option<String>,
@@ -2763,7 +2763,7 @@ fn write_claude_config(
 fn launch_macos_terminal(config_file: &std::path::Path, cwd: Option<&Path>) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
 
-    let preferred = crate::settings::get_preferred_terminal();
+    let preferred = cc_switch_core::settings::get_preferred_terminal();
     let terminal = preferred.as_deref().unwrap_or("terminal");
 
     let shell = get_user_shell();
@@ -3084,7 +3084,7 @@ fn launch_linux_terminal(config_file: &std::path::Path, cwd: Option<&Path>) -> R
     use std::os::unix::fs::PermissionsExt;
     use std::process::Command;
 
-    let preferred = crate::settings::get_preferred_terminal();
+    let preferred = cc_switch_core::settings::get_preferred_terminal();
 
     let shell = get_user_shell();
     let exec_line = build_exec_line(&shell, cwd);
@@ -3202,7 +3202,7 @@ fn launch_windows_terminal(
     config_file: &std::path::Path,
     cwd: Option<&Path>,
 ) -> Result<(), String> {
-    let preferred = crate::settings::get_preferred_terminal();
+    let preferred = cc_switch_core::settings::get_preferred_terminal();
     let terminal = preferred.as_deref().unwrap_or("cmd");
 
     let bat_file = temp_dir.join(format!("cc_switch_claude_{}.bat", std::process::id()));
@@ -3357,7 +3357,7 @@ read -r _
         std::fs::set_permissions(&script_file, std::fs::Permissions::from_mode(0o755))
             .map_err(|e| format!("设置脚本权限失败: {e}"))?;
 
-        let preferred = crate::settings::get_preferred_terminal();
+        let preferred = cc_switch_core::settings::get_preferred_terminal();
         let terminal = preferred.as_deref().unwrap_or("terminal");
 
         let result = match terminal {
@@ -3392,7 +3392,7 @@ read -r _
         std::fs::set_permissions(&script_file, std::fs::Permissions::from_mode(0o755))
             .map_err(|e| format!("设置脚本权限失败: {e}"))?;
 
-        let preferred = crate::settings::get_preferred_terminal();
+        let preferred = cc_switch_core::settings::get_preferred_terminal();
         let default_terminals = [
             ("gnome-terminal", vec!["--"]),
             ("konsole", vec!["-e"]),
@@ -3453,7 +3453,7 @@ read -r _
 
     #[cfg(target_os = "windows")]
     {
-        let preferred = crate::settings::get_preferred_terminal();
+        let preferred = cc_switch_core::settings::get_preferred_terminal();
         let terminal = preferred.as_deref().unwrap_or("cmd");
 
         let bat_file = temp_dir.join(format!("cc_switch_{}_{}.bat", label, pid));

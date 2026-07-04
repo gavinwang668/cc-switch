@@ -19,7 +19,7 @@ pub fn merge_deeplink_config(
     request: DeepLinkImportRequest,
 ) -> Result<DeepLinkImportRequest, String> {
     log::info!("Merging config for deep link request: {:?}", request.name);
-    crate::deeplink::parse_and_merge_config(&request).map_err(|e| e.to_string())
+    cc_switch_core::deeplink::parse_and_merge_config(&request).map_err(|e| e.to_string())
 }
 
 /// Import a provider from a deep link request (legacy, kept for compatibility)

@@ -35,7 +35,7 @@ pub async fn launch_session_terminal(
     let custom_config = custom_config.clone();
 
     // Read preferred terminal from global settings
-    let preferred = crate::settings::get_preferred_terminal();
+    let preferred = cc_switch_core::settings::get_preferred_terminal();
     // Map global setting terminal names to session terminal names
     // Global uses "iterm2", session terminal uses "iterm"
     let target = match preferred.as_deref() {

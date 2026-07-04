@@ -62,10 +62,7 @@ pub async fn ingress_auth_middleware(
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
 
-        let provided = auth_header
-            .strip_prefix("Bearer ")
-            .unwrap_or("")
-            .trim();
+        let provided = auth_header.strip_prefix("Bearer ").unwrap_or("").trim();
 
         if provided != expected.as_str() {
             log::warn!("Ingress auth token 不匹配");

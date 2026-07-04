@@ -123,7 +123,7 @@ pub fn save_stream_check_config(
 /// Copilot 供应商的 base_url 需要从 OAuth 管理器动态解析（按账号或默认端点）。
 /// `is_full_url` 的供应商已是完整地址，无需解析。
 async fn resolve_copilot_base_url_override(
-    provider: &crate::provider::Provider,
+    provider: &cc_switch_core::provider::Provider,
     copilot_state: &State<'_, CopilotAuthState>,
 ) -> Result<Option<String>, AppError> {
     let is_copilot = is_copilot_provider(provider);
@@ -137,7 +137,7 @@ async fn resolve_copilot_base_url_override(
         return Ok(None);
     }
 
-    let auth_manager = copilot_state.0.read().await;
+    let auth_manager = copilot_state.inner().read().await;
     let account_id = provider
         .meta
         .as_ref()
@@ -151,7 +151,7 @@ async fn resolve_copilot_base_url_override(
     Ok(Some(endpoint))
 }
 
-fn is_copilot_provider(provider: &crate::provider::Provider) -> bool {
+fn is_copilot_provider(provider: &cc_switch_core::provider::Provider) -> bool {
     provider
         .meta
         .as_ref()

@@ -106,11 +106,12 @@ pub async fn set_auto_failover_enabled(
             .map_err(|e| e.to_string())?;
 
         if queue.is_empty() {
-            let app_enum = crate::app_config::AppType::from_str(&app_type)
+            let app_enum = cc_switch_core::app_config::AppType::from_str(&app_type)
                 .map_err(|_| format!("无效的应用类型: {app_type}"))?;
 
-            let current_id = crate::settings::get_effective_current_provider(&state.db, &app_enum)
-                .map_err(|e| e.to_string())?;
+            let current_id =
+                cc_switch_core::settings::get_effective_current_provider(&state.db, &app_enum)
+                    .map_err(|e| e.to_string())?;
 
             let Some(current_id) = current_id else {
                 return Err("故障转移队列为空，且未设置当前供应商，无法开启故障转移".to_string());
@@ -172,8 +173,8 @@ pub async fn set_auto_failover_enabled(
     }
 
     // 刷新托盘菜单，确保状态同步
-    if let Ok(new_menu) = crate::tray::create_tray_menu(&app, &state).await {
-        if let Some(tray) = app.tray_by_id(crate::tray::TRAY_ID) {
+    if let Ok(new_menu) = cc_switch_core::tray::create_tray_menu(&app, &state).await {
+        if let Some(tray) = app.tray_by_id(cc_switch_core::tray::TRAY_ID) {
             let _ = tray.set_menu(Some(new_menu));
         }
     }

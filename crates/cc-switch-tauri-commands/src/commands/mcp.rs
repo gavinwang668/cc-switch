@@ -56,7 +56,7 @@ pub async fn get_mcp_config(
     state: State<'_, AppState>,
     app: String,
 ) -> Result<McpConfigResponse, String> {
-    let config_path = crate::config::get_app_config_path()
+    let config_path = cc_switch_core::config::get_app_config_path()
         .to_string_lossy()
         .to_string();
     let app_ty = AppType::from_str(&app).map_err(|e| e.to_string())?;
@@ -95,7 +95,7 @@ pub async fn upsert_mcp_server_in_config(
         existing
     } else {
         // 创建新服务器
-        let mut apps = crate::app_config::McpApps::default();
+        let mut apps = cc_switch_core::app_config::McpApps::default();
         apps.set_enabled_for(&app_ty, true);
 
         // 尝试从 spec 中提取 name，否则使用 id
