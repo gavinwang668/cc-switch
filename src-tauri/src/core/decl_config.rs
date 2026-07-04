@@ -28,12 +28,10 @@ pub struct DeclConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ProxySection {
-    #[serde(default = "default_listen")]
-    pub listen: String,
-    #[serde(default = "default_port")]
-    pub port: u16,
+    /// 仅保留 takeover（可应用）。listen/port 已移除：使用 CC_SWITCH_LISTEN / CC_SWITCH_PORT
+    /// 环境变量或 proxy-config 命令设置监听地址与端口。
     #[serde(default)]
     pub takeover: HashMap<String, bool>,
 }
@@ -41,19 +39,9 @@ pub struct ProxySection {
 impl Default for ProxySection {
     fn default() -> Self {
         Self {
-            listen: default_listen(),
-            port: default_port(),
             takeover: HashMap::new(),
         }
     }
-}
-
-fn default_listen() -> String {
-    "127.0.0.1".to_string()
-}
-
-fn default_port() -> u16 {
-    9090
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
