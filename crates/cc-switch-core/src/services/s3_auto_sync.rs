@@ -5,7 +5,6 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 #[cfg(feature = "tauri")]
-use tauri::{async_runtime, AppHandle, Emitter};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
@@ -86,25 +85,34 @@ fn persist_auto_sync_error(settings: &mut S3SyncSettings, error: &AppError) {
     let _ = settings::update_s3_sync_status(settings.status.clone());
 }
 
-fn emit_auto_sync_status_updated(app: Option<&AppHandle>, status: &str, error: Option<&str>) {
-    let Some(app) = app else {
-        return; // headless mode: no frontend to emit to
-    };
-    let payload = match error {
-        Some(message) => json!({
-            "source": "auto",
-            "status": status,
-            "error": message,
-        }),
-        None => json!({
-            "source": "auto",
-            "status": status,
-        }),
-    };
-
-    if let Err(err) = app.emit("s3-sync-status-updated", payload) {
-        log::debug!("[S3] failed to emit sync status update event: {err}");
+fn emit_auto_sync_status_updated(
+    #[cfg(feature = "tauri")] app: Option<&crate::TauriAppHandle>,
+    #[cfg(not(feature = "tauri"))] _app: Option<&crate::TauriAppHandle>,
+    status: &str,
+    error: Option<&str>,
+) {
+    #[cfg(feature = "tauri")]
+    {
+        let Some(app) = app else {
+            return;
+        };
+        let payload = match error {
+            Some(message) => json!({
+                "source": "auto",
+                "status": status,
+                "error": message,
+            }),
+            None => json!({
+                "source": "auto",
+                "status": status,
+            }),
+        };
+        if let Err(err) = app.emit("s3-sync-status-updated", payload) {
+            log::debug!("[S3] failed to emit sync status update event: {err}");
+        }
     }
+    #[cfg(not(feature = "tauri"))]
+    let _ = _app;
 }
 
 async fn run_auto_sync_upload(
@@ -152,7 +160,7 @@ fn spawn_worker_task(future: impl std::future::Future<Output = ()> + Send + 'sta
     if let Ok(handle) = tokio::runtime::Handle::try_current() {
         handle.spawn(future);
     } else {
-        async_runtime::spawn(future);
+        tokio::spawn(future);
     }
 }
 
