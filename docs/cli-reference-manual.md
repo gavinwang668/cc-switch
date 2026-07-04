@@ -477,7 +477,7 @@ Skills 管理:
     list-skills / remove-skill / toggle-skill
 
 其他:
-    check-env / list-sessions / stream-check / stream-check-all / help
+    check-env / list-sessions / help
 ```
 
 ---
@@ -1336,10 +1336,7 @@ cc-switch-cli apply-config /etc/cc-switch/config.yaml
 **YAML 配置示例**：
 
 ```yaml
-# 代理服务器（仅解析/校验，apply-config 暂不会应用 listen/port/takeover）
 proxy:
-  listen: "127.0.0.1"
-  port: 9090
   takeover:
     claude: true
     codex: false
@@ -1380,9 +1377,9 @@ settings:
   backup_retain_count: 10
 ```
 
-> **说明**：
+> **说明**（2026-07-04 更新）：
 > - `providers` 中通过 `env` 设置环境变量，`current: true` 表示切换为当前供应商。
-> - `proxy.listen` / `proxy.port` / `proxy.takeover` 目前只参与解析和校验，**不会被 `apply-config` 实际应用**。请使用 `proxy-config` 命令、`CC_SWITCH_LISTEN` / `CC_SWITCH_PORT` 环境变量或 `takeover` 命令来设置。
+> - **已移除字段**：`proxy.listen` 与 `proxy.port` 已从 YAML schema 删除。请使用 `CC_SWITCH_LISTEN` / `CC_SWITCH_PORT` 环境变量，或 `proxy-config` 命令设置监听地址与端口。`proxy.takeover` 仍可在 YAML 中配置并通过 `apply-config` 应用。
 > - 如需设置 `api_format`，请在 `add-provider` / `update-provider` 中使用 `--api-format`。
 
 ---
@@ -1489,6 +1486,8 @@ cc-switch-cli usage-summary --days 30
 
 ### speedtest — API 端点测速
 
+> ℹ️ **不依赖代理运行**：此命令直接向目标 URL 发送 HTTP 请求，不需要代理服务器在运行。适合首次配置时测试供应商连通性。
+
 ```bash
 cc-switch-cli speedtest <URL> [--timeout <SECONDS>]
 ```
@@ -1512,6 +1511,8 @@ cc-switch-cli speedtest https://api.openai.com --timeout 5
 ```
 
 ### verify-key — 验证 API Key
+
+> ℹ️ **不依赖代理运行**：此命令直接向供应商 API 发送认证请求，不需要代理服务器在运行。
 
 ```bash
 cc-switch-cli verify-key --base-url <URL> --api-key <KEY>
@@ -1830,11 +1831,7 @@ cc-switch-cli list-sessions --limit 50
 
 ### remove-session — 删除会话
 
-```bash
-cc-switch-cli remove-session <ID>
-```
-
-> **注意**：删除会话需要完整的 provider_id 和 source_path 参数，当前 CLI 命令暂不支持完整参数。建议使用 GUI 删除，或手动删除会话文件。
+> ⚠️ **GUI 专属命令**：此命令需要 `provider_id` 与 `source_path` 完整参数，CLI 已移除此命令。CLI 用户请手动删除会话文件，或使用 GUI。
 
 ---
 
@@ -1904,21 +1901,7 @@ cc-switch-cli model-stats --days 7
 
 ## 流式健康检查
 
-### stream-check — 流式检查供应商
-
-```bash
-cc-switch-cli stream-check <APP> <ID>
-```
-
-> **注意**：流式检查需要代理服务器运行中且 CopilotAuthState 初始化，当前 CLI 环境不支持完整流式检查。请使用 `speedtest` 或 `verify-key` 命令进行基本连通性测试。
-
-### stream-check-all — 流式检查全部供应商
-
-```bash
-cc-switch-cli stream-check-all
-```
-
-> 同上，当前 CLI 环境不支持。
+> ⚠️ **GUI 专属命令**：`stream-check` 与 `stream-check-all` 依赖代理运行时的 `CopilotAuthState`，CLI 架构上不可行。CLI 用户请使用 `speedtest` 或 `verify-key` 进行基本连通性测试。
 
 ---
 

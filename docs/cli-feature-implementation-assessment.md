@@ -1,12 +1,18 @@
 # CC Switch CLI 功能实现评估
 
-> 文档日期：2026-06-27 ｜ 最后更新：2026-06-27 ｜ 状态：三阶段全部完成
+> 文档日期：2026-06-27 ｜ 最后更新：2026-07-04 ｜ 状态：Phase 2 完成，Phase 1 基本完成，Phase 3 部分完成
 >
 > 目的：对 CLI 与 GUI 的功能差异逐项评估，分为"必须实现"、"可实现"、"没必要实现"三类，并为每项功能编号。
 >
 > **核心原则**：GUI 的主体功能是代理和协议转换，其他均为附带功能。CLI 必须实现的核心是代理运行与协议转换的等价能力；MCP/Prompt/Skills/环境变量/会话等属附带功能列为可实现；云同步/AUTH/Keychain 等非核心功能列为没必要实现。
 >
-> **实现状态**：Phase 1（REQ-001~009）✅、Phase 2（REQ-010~019）✅、Phase 3（OPT 系列关键功能）✅ 已全部实现。完整命令参考见 `docs/cli-reference-manual.md`。
+> **实现状态**（2026-07-04 修订）：
+> - Phase 2（REQ-010~019）✅ 完成
+> - Phase 1（REQ-001~009）🟡 基本完成 — `apply-config` 代理字段（listen/port/takeover）只校验不应用，详见参考手册"已知限制"
+> - Phase 3（OPT 关键功能）🔴 部分完成 — `stream-check` / `stream-check-all` / `remove-session` 为桩实现，已标注为"GUI 专属"，详见参考手册对应章节
+> - `add-provider` env 字段名按 `--app` 自动选择（claude→ANTHROPIC_*、codex→OPENAI_*、gemini→GEMINI_*）
+>
+> 完整命令参考见 `docs/cli-reference-manual.md`。本评估文档的分类与优先级修订详见 `docs/superpowers/specs/2026-07-04-cli-feature-review-design.md`。
 
 ---
 
