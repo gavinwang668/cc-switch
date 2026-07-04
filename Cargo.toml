@@ -1,0 +1,24 @@
+# CC Switch Cargo Workspace
+#
+# 四个成员 crate：
+# - crates/cc-switch-core          纯业务逻辑（无 Tauri 依赖）
+# - crates/cc-switch-tauri-commands  #[tauri::command] 包装层
+# - crates/cc-switch-cli           CLI 二进制（只依赖 core）
+# - src-tauri                      GUI 二进制（后续重命名为 cc-switch-app）
+
+[workspace]
+resolver = "2"
+members = [
+    "src-tauri",
+]
+
+# 共享 profile（与 src-tauri 现有 profile 保持一致）
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = "s"
+panic = "unwind"
+strip = "symbols"
+
+[profile.dev]
+opt-level = 0
