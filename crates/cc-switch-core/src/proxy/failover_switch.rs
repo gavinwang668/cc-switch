@@ -143,6 +143,7 @@ impl FailoverSwitchManager {
 
         let mut switched = false;
 
+        #[cfg(feature = "tauri")]
         if let Some(app) = app_handle {
             if let Some(app_state) = app.try_state::<crate::store::AppState>() {
                 switched = app_state
@@ -156,15 +157,13 @@ impl FailoverSwitchManager {
                     return Ok(false);
                 }
 
-                #[cfg(feature = "tauri")]
-                {
                 if let Ok(new_menu) = crate::tray::create_tray_menu(app, app_state.inner()).await {
                     if let Some(tray) = app.tray_by_id(crate::tray::TRAY_ID) {
                         if let Err(e) = tray.set_menu(Some(new_menu)) {
                             log::error!("[Failover] 更新托盘菜单失败: {e}");
                         }
                     }
-                }}
+                }
             }
 
             // 发射事件到前端
@@ -176,6 +175,12 @@ impl FailoverSwitchManager {
             if let Err(e) = app.emit("provider-switched", event_data) {
                 log::error!("[Failover] 发射事件失败: {e}");
             }
+        }
+
+        #[cfg(not(feature = "tauri"))]
+        {
+            // CLI 模式下无 Tauri 运行时，跳过状态切换与事件推送
+            let _ = app_handle;
         }
 
         Ok(switched)

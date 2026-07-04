@@ -228,7 +228,7 @@ impl DeclConfig {
                 Some(svc) => {
                     let takeover_app = crate::app_config::AppType::from_str(app)
                         .map_err(|_| format!("无效的应用类型: {app}"))?;
-                    svc.set_takeover_for_app(takeover_app, *enabled)
+                    svc.set_takeover_for_app(takeover_app.as_str(), *enabled)
                         .await
                         .map_err(|e| format!("设置接管 {app}={} 失败: {e}", enabled))?;
                     actions.push(format!("代理接管 {app}={}", enabled));
@@ -325,19 +325,17 @@ impl DeclConfig {
                     );
                 }
             }
-            if let Ok((_, af)) = db.get_proxy_flags_sync(app) {
-                if af {
-                    config.failover.auto = true;
-                }
+            let (_, af) = db.get_proxy_flags_sync(app);
+            if af {
+                config.failover.auto = true;
             }
         }
 
         // 读取接管状态（通过 proxy flags 推断）
         for app in &["claude", "codex", "gemini"] {
-            if let Ok((enabled, _)) = db.get_proxy_flags_sync(app) {
-                if enabled {
-                    config.proxy.takeover.insert(app.to_string(), true);
-                }
+            let (enabled, _) = db.get_proxy_flags_sync(app);
+            if enabled {
+                config.proxy.takeover.insert(app.to_string(), true);
             }
         }
 

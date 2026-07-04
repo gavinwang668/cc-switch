@@ -446,8 +446,12 @@ impl ProxyService {
         }
 
         // 4. 创建并启动服务器
+        #[cfg(feature = "tauri")]
         let app_handle = self.app_handle.read().await.clone();
+        #[cfg(feature = "tauri")]
         let server = ProxyServer::new(config.clone(), self.db.clone(), app_handle);
+        #[cfg(not(feature = "tauri"))]
+        let server = ProxyServer::new(config.clone(), self.db.clone());
         let info = server
             .start()
             .await
@@ -2609,8 +2613,12 @@ impl ProxyService {
                     .map_err(|e| format!("重启前停止代理服务器失败: {e}"))?;
             }
 
+            #[cfg(feature = "tauri")]
             let app_handle = self.app_handle.read().await.clone();
+            #[cfg(feature = "tauri")]
             let new_server = ProxyServer::new(new_config.clone(), self.db.clone(), app_handle);
+            #[cfg(not(feature = "tauri"))]
+            let new_server = ProxyServer::new(new_config.clone(), self.db.clone());
             let info = new_server
                 .start()
                 .await

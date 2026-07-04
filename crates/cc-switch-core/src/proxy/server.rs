@@ -29,8 +29,6 @@ use std::sync::Arc;
 use tokio::sync::{oneshot, RwLock};
 use tokio::task::JoinHandle;
 
-#[cfg(feature = "tauri")]
-
 /// 代理服务器状态（共享）
 #[derive(Clone)]
 pub struct ProxyState {
@@ -67,6 +65,7 @@ impl ProxyServer {
     pub fn new(
         config: ProxyConfig,
         db: Arc<Database>,
+        #[cfg(feature = "tauri")]
         app_handle: Option<crate::TauriAppHandle>,
     ) -> Self {
         // 创建共享的 ProviderRouter（熔断器状态将跨所有请求保持）
@@ -85,6 +84,7 @@ impl ProxyServer {
             provider_router,
             gemini_shadow: Arc::new(GeminiShadowStore::default()),
             codex_chat_history: Arc::new(CodexChatHistoryStore::default()),
+            #[cfg(feature = "tauri")]
             app_handle,
             failover_manager,
             shutdown_tx: shutdown_tx.clone(),

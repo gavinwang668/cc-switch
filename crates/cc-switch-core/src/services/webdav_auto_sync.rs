@@ -4,7 +4,6 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use serde_json::json;
-#[cfg(feature = "tauri")]
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 

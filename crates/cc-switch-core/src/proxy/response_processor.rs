@@ -825,6 +825,7 @@ mod tests {
     use std::collections::HashMap;
     use std::str::FromStr;
     use std::sync::Arc;
+    use tokio::sync::oneshot;
     use tokio::sync::RwLock;
 
     #[test]
@@ -942,8 +943,10 @@ mod tests {
             provider_router: Arc::new(ProviderRouter::new(db.clone())),
             gemini_shadow: Arc::new(GeminiShadowStore::default()),
             codex_chat_history: Arc::new(CodexChatHistoryStore::default()),
+            #[cfg(feature = "tauri")]
             app_handle: None,
             failover_manager: Arc::new(FailoverSwitchManager::new(db)),
+            shutdown_tx: Arc::new(RwLock::new(None)),
         }
     }
 

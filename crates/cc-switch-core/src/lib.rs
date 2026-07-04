@@ -59,3 +59,24 @@ pub use error::AppError;
 pub use provider::{Provider, ProviderMeta};
 pub use settings::{get_settings, reload_settings, update_settings, AppSettings};
 pub use store::AppState;
+
+// Service 层 re-export（CLI 直接调用）
+pub use services::{
+    LogFilters, McpService, PromptService, ProviderService, ProviderSortUpdate, ProxyService,
+    SkillService, SpeedtestService,
+};
+
+// proxy 类型 / 模块 re-export
+pub use proxy::circuit_breaker::CircuitBreakerConfig;
+pub use proxy::http_client;
+pub use proxy::types::{AppProxyConfig, GlobalProxyConfig, ProxyConfig};
+
+// config 函数 re-export
+pub use config::get_app_config_dir;
+
+// 其他类型 re-export
+pub use prompt::Prompt;
+
+// 函数 re-export
+pub use services::env_checker::check_env_conflicts;
+pub use services::model_fetch::{fetch_models, FetchedModel};

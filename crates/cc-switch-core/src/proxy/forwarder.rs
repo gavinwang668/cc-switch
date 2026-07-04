@@ -1256,6 +1256,9 @@ impl RequestForwarder {
         // GitHub Copilot 动态 endpoint 路由
         // 从 CopilotAuthManager 获取缓存的 API endpoint（支持企业版等非默认 endpoint）
         if is_copilot && !is_full_url {
+            // CLI 模式（无 tauri feature）下 TauriAppHandle 是空桩，没有 state() 方法，
+            // 此时跳过动态 endpoint 查找，直接使用静态 base_url。
+            #[cfg(feature = "tauri")]
             if let Some(app_handle) = &self.app_handle {
                 let copilot_state = app_handle.state::<CopilotAuthState>();
                 let copilot_auth = copilot_state.0.read().await;
@@ -1435,6 +1438,16 @@ impl RequestForwarder {
         let mut auth_headers = if let Some(mut auth) = adapter.extract_auth(provider) {
             // GitHub Copilot 特殊处理：从 CopilotAuthManager 获取真实 token
             if auth.strategy == AuthStrategy::GitHubCopilot {
+                // CLI 模式（无 tauri feature）下 TauriAppHandle 没有 state() 方法，
+                // 无法获取 CopilotAuthManager，直接返回认证错误。
+                #[cfg(not(feature = "tauri"))]
+                {
+                    log::error!("[Copilot] AppHandle 不可用（CLI 模式）");
+                    return Err(ProxyError::AuthError(
+                        "GitHub Copilot 认证不可用（无 AppHandle）".to_string(),
+                    ));
+                }
+                #[cfg(feature = "tauri")]
                 if let Some(app_handle) = &self.app_handle {
                     let copilot_state = app_handle.state::<CopilotAuthState>();
                     let copilot_auth: tokio::sync::RwLockReadGuard<'_, CopilotAuthManager> =
@@ -1486,6 +1499,16 @@ impl RequestForwarder {
 
             // Codex OAuth 特殊处理：从 CodexOAuthManager 获取真实 access_token
             if auth.strategy == AuthStrategy::CodexOAuth {
+                // CLI 模式（无 tauri feature）下 TauriAppHandle 没有 state() 方法，
+                // 无法获取 CodexOAuthManager，直接返回认证错误。
+                #[cfg(not(feature = "tauri"))]
+                {
+                    log::error!("[CodexOAuth] AppHandle 不可用（CLI 模式）");
+                    return Err(ProxyError::AuthError(
+                        "Codex OAuth 认证不可用（无 AppHandle）".to_string(),
+                    ));
+                }
+                #[cfg(feature = "tauri")]
                 if let Some(app_handle) = &self.app_handle {
                     let codex_state = app_handle.state::<CodexOAuthState>();
                     let codex_auth: tokio::sync::RwLockReadGuard<'_, CodexOAuthManager> =
@@ -2089,77 +2112,99 @@ impl RequestForwarder {
         provider: &Provider,
         body: &mut serde_json::Value,
     ) {
-        let Some(model_id) = body.get("model").and_then(|v| v.as_str()) else {
-            return;
-        };
-        let model_id = model_id.to_string();
-
-        let Some(app_handle) = &self.app_handle else {
-            return;
-        };
-        let copilot_state = app_handle.state::<CopilotAuthState>();
-        let copilot_auth = copilot_state.0.read().await;
-        let account_id = provider
-            .meta
-            .as_ref()
-            .and_then(|m| m.managed_account_id_for("github_copilot"));
-
-        let models_result = match account_id.as_deref() {
-            Some(id) => copilot_auth.fetch_models_for_account(id).await,
-            None => copilot_auth.fetch_models().await,
-        };
-
-        let models = match models_result {
-            Ok(m) => m,
-            Err(err) => {
-                log::debug!("[Copilot] live model list unavailable, skip resolution: {err}");
-                return;
-            }
-        };
-
-        if let Some(resolved) =
-            super::providers::copilot_model_map::resolve_against_models(&model_id, &models)
+        // CLI 模式（无 tauri feature）下 TauriAppHandle 没有 state() 方法，
+        // 无法获取 CopilotAuthManager，直接跳过 live model 解析。
+        #[cfg(not(feature = "tauri"))]
         {
-            log::info!("[Copilot] live-model resolve: {model_id} → {resolved}");
-            body["model"] = serde_json::Value::String(resolved);
+            let _ = (provider, body);
+            return;
+        }
+
+        #[cfg(feature = "tauri")]
+        {
+            let Some(model_id) = body.get("model").and_then(|v| v.as_str()) else {
+                return;
+            };
+            let model_id = model_id.to_string();
+
+            let Some(app_handle) = &self.app_handle else {
+                return;
+            };
+            let copilot_state = app_handle.state::<CopilotAuthState>();
+            let copilot_auth = copilot_state.0.read().await;
+            let account_id = provider
+                .meta
+                .as_ref()
+                .and_then(|m| m.managed_account_id_for("github_copilot"));
+
+            let models_result = match account_id.as_deref() {
+                Some(id) => copilot_auth.fetch_models_for_account(id).await,
+                None => copilot_auth.fetch_models().await,
+            };
+
+            let models = match models_result {
+                Ok(m) => m,
+                Err(err) => {
+                    log::debug!("[Copilot] live model list unavailable, skip resolution: {err}");
+                    return;
+                }
+            };
+
+            if let Some(resolved) =
+                super::providers::copilot_model_map::resolve_against_models(&model_id, &models)
+            {
+                log::info!("[Copilot] live-model resolve: {model_id} → {resolved}");
+                body["model"] = serde_json::Value::String(resolved);
+            }
         }
     }
 
     async fn is_copilot_openai_vendor_model(&self, provider: &Provider, model_id: &str) -> bool {
-        let Some(app_handle) = &self.app_handle else {
-            log::debug!("[Copilot] AppHandle unavailable, fallback to chat/completions");
+        // CLI 模式（无 tauri feature）下 TauriAppHandle 没有 state() 方法，
+        // 无法获取 CopilotAuthManager，回退到 chat/completions。
+        #[cfg(not(feature = "tauri"))]
+        {
+            let _ = (provider, model_id);
             return false;
-        };
+        }
 
-        let copilot_state = app_handle.state::<CopilotAuthState>();
-        let copilot_auth = copilot_state.0.read().await;
-        let account_id = provider
-            .meta
-            .as_ref()
-            .and_then(|m| m.managed_account_id_for("github_copilot"));
+        #[cfg(feature = "tauri")]
+        {
+            let Some(app_handle) = &self.app_handle else {
+                log::debug!("[Copilot] AppHandle unavailable, fallback to chat/completions");
+                return false;
+            };
 
-        let vendor_result = match account_id.as_deref() {
-            Some(id) => {
-                copilot_auth
-                    .get_model_vendor_for_account(id, model_id)
-                    .await
-            }
-            None => copilot_auth.get_model_vendor(model_id).await,
-        };
+            let copilot_state = app_handle.state::<CopilotAuthState>();
+            let copilot_auth = copilot_state.0.read().await;
+            let account_id = provider
+                .meta
+                .as_ref()
+                .and_then(|m| m.managed_account_id_for("github_copilot"));
 
-        match vendor_result {
-            Ok(Some(vendor)) => vendor.eq_ignore_ascii_case("openai"),
-            Ok(None) => {
-                log::debug!(
-                    "[Copilot] Model vendor unavailable for {model_id}, fallback to chat/completions"
-                );
-                false
-            }
-            Err(err) => {
-                log::warn!(
-                    "[Copilot] Failed to resolve model vendor for {model_id}, fallback to chat/completions: {err}"
-                );
-                false
+            let vendor_result = match account_id.as_deref() {
+                Some(id) => {
+                    copilot_auth
+                        .get_model_vendor_for_account(id, model_id)
+                        .await
+                }
+                None => copilot_auth.get_model_vendor(model_id).await,
+            };
+
+            match vendor_result {
+                Ok(Some(vendor)) => vendor.eq_ignore_ascii_case("openai"),
+                Ok(None) => {
+                    log::debug!(
+                        "[Copilot] Model vendor unavailable for {model_id}, fallback to chat/completions"
+                    );
+                    false
+                }
+                Err(err) => {
+                    log::warn!(
+                        "[Copilot] Failed to resolve model vendor for {model_id}, fallback to chat/completions: {err}"
+                    );
+                    false
+                }
             }
         }
     }

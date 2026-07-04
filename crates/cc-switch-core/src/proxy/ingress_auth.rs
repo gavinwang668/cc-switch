@@ -4,8 +4,8 @@
 //! 无头服务器部署时，防止代理端口被未经授权访问。
 
 use axum::{
-    extract::ConnectInfo,
-    http::{Request, StatusCode},
+    extract::{ConnectInfo, Request},
+    http::StatusCode,
     middleware::Next,
     response::Response,
 };
@@ -32,11 +32,11 @@ impl IngressAuthLayer {
 }
 
 /// Axum middleware 函数
-pub async fn ingress_auth_middleware<B>(
+pub async fn ingress_auth_middleware(
     layer: axum::extract::State<IngressAuthLayer>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    req: Request<B>,
-    next: Next<B>,
+    req: Request,
+    next: Next,
 ) -> Result<Response, StatusCode> {
     // 1. 校验 IP CIDR
     if !layer.acl_cidrs.is_empty() {

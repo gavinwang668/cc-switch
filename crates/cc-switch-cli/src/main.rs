@@ -2640,11 +2640,11 @@ fn cmd_read_live(app: String) {
 fn cmd_fetch_models(base_url: &str, api_key: &str, full_url: bool, models_path: Option<&str>) {
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async {
-        match cc_switch_core::fetch_models_for_config(
-            base_url.to_string(),
-            api_key.to_string(),
-            Some(full_url),
-            models_path.map(|s| s.to_string()),
+        match cc_switch_core::fetch_models(
+            base_url,
+            api_key,
+            full_url,
+            models_path,
             None,
         )
         .await
@@ -3972,7 +3972,7 @@ fn cmd_check_env() {
     ];
     let mut found_any = false;
     for app in &all_apps {
-        match cc_switch_core::check_env_conflicts(app.to_string()) {
+        match cc_switch_core::check_env_conflicts(app) {
             Ok(conflicts) => {
                 if !conflicts.is_empty() {
                     found_any = true;
@@ -4167,9 +4167,17 @@ fn cmd_model_stats(days: u32) {
 
 /// reload: 热重载代理配置
 fn cmd_reload() {
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
+    let proxy_service = cc_switch_core::ProxyService::new(db);
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async {
-        let status = match cc_switch_core::services::ProxyService::get_status().await {
+        let status = match proxy_service.get_status().await {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("错误: 获取代理状态失败: {e}");
@@ -4451,7 +4459,7 @@ fn cmd_rollback() {
             std::process::exit(1);
         }
     };
-    let backups = match db.list_backups() {
+    let backups = match cc_switch_core::Database::list_backups() {
         Ok(b) => b,
         Err(e) => {
             eprintln!("列出备份失败: {e}");
@@ -4460,14 +4468,14 @@ fn cmd_rollback() {
     };
     let apply_backups: Vec<_> = backups
         .iter()
-        .filter(|b| b.contains("apply-rollback"))
+        .filter(|b| b.filename.contains("apply-rollback"))
         .collect();
     if apply_backups.is_empty() {
         eprintln!("没有找到 apply 回滚备份。每次执行 apply-config 会自动创建备份。");
         std::process::exit(1);
     }
-    let latest = apply_backups.last().unwrap();
-    match db.restore_backup(latest) {
+    let latest = &apply_backups.last().unwrap().filename;
+    match db.restore_from_backup(latest) {
         Ok(_) => println!("✓ 已回滚到备份: {latest}"),
         Err(e) => {
             eprintln!("回滚失败: {e}");
@@ -4547,9 +4555,17 @@ fn cmd_preview_conversion(from: &str, to: &str, payload: &str, _base_url: Option
 
 /// proxy-trace: 代理链路跟踪
 fn cmd_proxy_trace(app: &str, model: &str) {
+    let db = match init_db() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("错误: {e}");
+            std::process::exit(1);
+        }
+    };
+    let proxy_service = cc_switch_core::ProxyService::new(db);
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
     rt.block_on(async {
-        let status = match cc_switch_core::services::ProxyService::get_status().await {
+        let status = match proxy_service.get_status().await {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("错误: 获取代理状态失败: {e}");
@@ -4591,18 +4607,20 @@ fn cmd_replay_request(request_id: &str) {
         Ok(Some(detail)) => {
             println!("请求详情: {}", request_id);
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            println!("  时间: {}", detail.created_at.unwrap_or("?".to_string()));
-            println!("  应用: {}", detail.app_type.unwrap_or("?".to_string()));
-            println!("  模型: {}", detail.model.unwrap_or("?".to_string()));
-            println!();
-            if let Some(body) = &detail.request_body {
-                println!("  请求体:");
-                let pretty = serde_json::to_string_pretty(&serde_json::from_str::<serde_json::Value>(body).unwrap_or(serde_json::Value::String(body.clone())))
-                    .unwrap_or_else(|_| body.clone());
-                println!("{pretty}");
-            } else {
-                eprintln!("  请求体未记录（需 CC_SWITCH_LOG_BODIES=1 环境变量启用）");
+            println!("  时间: {}", detail.created_at);
+            println!("  应用: {}", detail.app_type);
+            println!("  模型: {}", detail.model);
+            if let Some(pm) = &detail.pricing_model {
+                if !pm.is_empty() {
+                    println!("  计价模型: {pm}");
+                }
             }
+            println!("  状态码: {}", detail.status_code);
+            if let Some(err) = &detail.error_message {
+                println!("  错误: {err}");
+            }
+            println!();
+            eprintln!("  请求体未记录（数据库不存储请求体，无法重放）");
             println!();
             println!("  如需重放，将 curl 命令指向你的代理地址:");
             println!("  curl -s http://127.0.0.1:9090/v1/chat/completions \\");
