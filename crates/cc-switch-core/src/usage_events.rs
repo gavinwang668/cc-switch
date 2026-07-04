@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use std::time::Duration;
 
+#[cfg(feature = "tauri")]
 use tauri::{AppHandle, Emitter};
 
 /// 前端监听的事件名

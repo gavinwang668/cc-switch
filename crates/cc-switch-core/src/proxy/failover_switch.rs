@@ -9,6 +9,7 @@ use crate::database::Database;
 use crate::error::AppError;
 use std::collections::HashSet;
 use std::sync::Arc;
+#[cfg(feature = "tauri")]
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 
@@ -89,7 +90,7 @@ impl FailoverSwitchManager {
     /// - `Err(e)` - 切换过程中发生错误
     pub async fn try_switch(
         &self,
-        app_handle: Option<&tauri::AppHandle>,
+        app_handle: Option<&TauriAppHandle>,
         app_type: &str,
         provider_id: &str,
         provider_name: &str,
@@ -118,7 +119,7 @@ impl FailoverSwitchManager {
 
     async fn do_switch(
         &self,
-        app_handle: Option<&tauri::AppHandle>,
+        app_handle: Option<&TauriAppHandle>,
         app_type: &str,
         provider_id: &str,
         provider_name: &str,

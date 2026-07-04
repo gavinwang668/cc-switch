@@ -4,6 +4,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use serde_json::json;
+#[cfg(feature = "tauri")]
 use tauri::{async_runtime, AppHandle, Emitter};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -155,7 +156,7 @@ fn spawn_worker_task(future: impl std::future::Future<Output = ()> + Send + 'sta
     }
 }
 
-pub fn start_worker(db: Arc<crate::database::Database>, app: Option<tauri::AppHandle>) {
+pub fn start_worker(db: Arc<crate::database::Database>, app: Option<TauriAppHandle>) {
     if DB_CHANGE_TX.get().is_some() {
         return;
     }
@@ -174,7 +175,7 @@ pub fn start_worker(db: Arc<crate::database::Database>, app: Option<tauri::AppHa
 async fn run_worker_loop(
     db: Arc<crate::database::Database>,
     mut rx: Receiver<String>,
-    app: Option<tauri::AppHandle>,
+    app: Option<TauriAppHandle>,
 ) {
     while let Some(first_table) = rx.recv().await {
         let started_at = Instant::now();

@@ -7,8 +7,15 @@
 //! - core: bootstrap / provider_manager / decl_config
 //! - error / provider / app_config / config / settings: 基础类型
 //!
-//! 严禁依赖 tauri / tauri-plugin-* / webkit2gtk。
-//! Tauri 命令包装层在 cc-switch-tauri-commands crate 中。
+//! 当 `feature = "tauri"` 未启用时（CLI 模式），Tauri 类型退化为空桩。
+
+// 跨 feature 的 Tauri 类型别名
+#[cfg(feature = "tauri")]
+pub use tauri::AppHandle as TauriAppHandle;
+#[cfg(not(feature = "tauri"))]
+/// CLI 模式：空 AppHandle 桩
+#[derive(Clone, Debug, Default)]
+pub struct TauriAppHandle;
 
 #![allow(clippy::module_inception)]
 
