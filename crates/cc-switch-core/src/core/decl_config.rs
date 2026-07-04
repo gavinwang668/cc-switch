@@ -275,20 +275,25 @@ impl DeclConfig {
     pub fn from_database(db: &crate::database::Database) -> Result<Self, String> {
         let mut config = DeclConfig::default();
 
-        // 读取所有供应商
-        let all_providers = db
-            .get_all_providers("claude")
-            .or(db.get_all_providers("codex"))
-            .or(db.get_all_providers("gemini"))
-            .or(db.get_all_providers("opencode"))
-            .or(db.get_all_providers("openclaw"))
-            .or(db.get_all_providers("hermes"))
-            .or(db.get_all_providers("claude-desktop"))
-            .unwrap_or_default();
-
-        for (app_type, providers) in all_providers {
-            let current_id = db.get_current_provider_id(&app_type).unwrap_or_default();
-            for p in providers {
+        // 读取所有应用的供应商
+        let app_types = [
+            "claude",
+            "claude-desktop",
+            "codex",
+            "gemini",
+            "opencode",
+            "openclaw",
+            "hermes",
+        ];
+        for app_type in &app_types {
+            let providers = db
+                .get_all_providers(app_type)
+                .map_err(|e| format!("读取 {app_type} 供应商失败: {e}"))?;
+            let current_id = db
+                .get_current_provider(app_type)
+                .unwrap_or(None)
+                .unwrap_or_default();
+            for (_id, p) in &providers {
                 let mut env_map = HashMap::new();
                 if let Some(env_val) = p.settings_config.get("env") {
                     if let Some(obj) = env_val.as_object() {
@@ -300,7 +305,7 @@ impl DeclConfig {
                     }
                 }
                 config.providers.push(ProviderEntry {
-                    app: app_type.clone(),
+                    app: app_type.to_string(),
                     id: p.id.clone(),
                     name: p.name.clone(),
                     env: env_map,
@@ -326,10 +331,12 @@ impl DeclConfig {
             }
         }
 
-        // 读取接管状态
+        // 读取接管状态（通过 proxy flags 推断）
         for app in &["claude", "codex", "gemini"] {
-            if let Ok(true) = db.is_takeover_active(app) {
-                config.proxy.takeover.insert(app.to_string(), true);
+            if let Ok((enabled, _)) = db.get_proxy_flags_sync(app) {
+                if enabled {
+                    config.proxy.takeover.insert(app.to_string(), true);
+                }
             }
         }
 

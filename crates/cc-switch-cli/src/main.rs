@@ -4323,26 +4323,18 @@ fn cmd_acl(action: Option<&str>, cidr: Option<&str>) {
 /// smoke-test: 协议转换烟雾测试
 fn cmd_smoke_test(app: Option<&str>) {
     let results = if let Some(app_str) = app {
-        let app_type = match cc_switch_core::AppType::from_str(app_str) {
-            Ok(a) => a,
-            Err(_) => {
+        // 单应用模式：转换为相应的测试路径
+        let (from, to, model) = match app_str {
+            "claude" | "claude-desktop" => ("anthropic", "openai_chat", "claude-sonnet-5"),
+            "codex" => ("openai_chat", "anthropic", "gpt-5.5"),
+            "gemini" => ("openai_chat", "openai_chat", "gemini-3.1-pro"),
+            _ => {
                 eprintln!("错误: 无效的应用类型: {app_str}");
                 std::process::exit(1);
             }
         };
-        let base_url = match &app_type {
-            cc_switch_core::AppType::Claude => "https://api.anthropic.com",
-            cc_switch_core::AppType::Codex => "https://api.openai.com/v1",
-            cc_switch_core::AppType::Gemini => "https://generativelanguage.googleapis.com",
-            _ => "https://api.openai.com/v1",
-        };
-        let fmt = match &app_type {
-            cc_switch_core::AppType::Claude => "anthropic",
-            cc_switch_core::AppType::Gemini => "gemini_native",
-            _ => "openai_chat",
-        };
         vec![cc_switch_core::proxy::smoke_test::run_smoke_test(
-            &app_type, base_url, Some(fmt),
+            from, to, model,
         )]
     } else {
         cc_switch_core::proxy::smoke_test::run_all_smoke_tests()
@@ -4518,7 +4510,7 @@ fn cmd_toggle_provider(app: &str, id: &str, enabled: &str) {
 }
 
 /// preview-conversion: 预览协议转换
-fn cmd_preview_conversion(from: &str, to: &str, payload: &str, base_url: Option<&str>) {
+fn cmd_preview_conversion(from: &str, to: &str, payload: &str, _base_url: Option<&str>) {
     let body: serde_json::Value = match serde_json::from_str(payload) {
         Ok(v) => v,
         Err(e) => {
@@ -4526,15 +4518,24 @@ fn cmd_preview_conversion(from: &str, to: &str, payload: &str, base_url: Option<
             std::process::exit(1);
         }
     };
-    let url = base_url.unwrap_or("https://api.openai.com/v1");
-    match cc_switch_core::proxy::providers::transform::transform_request(&body, from, to, url) {
+    let result = match (from, to) {
+        ("anthropic", "openai_chat") => cc_switch_core::proxy::providers::transform::anthropic_to_openai(body),
+        ("openai_chat", "anthropic") => cc_switch_core::proxy::providers::transform::openai_to_anthropic(body),
+        _ => {
+            eprintln!("错误: 不支持的转换路径: {from} → {to}");
+            eprintln!("支持的路径: anthropic → openai_chat, openai_chat → anthropic");
+            std::process::exit(1);
+        }
+    };
+    match result {
         Ok(transformed) => {
             println!("协议转换预览:");
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             println!("  源格式: {from}");
             println!("  目标格式: {to}");
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            let pretty = serde_json::to_string_pretty(&transformed).unwrap_or_else(|_| "序列化失败".to_string());
+            let pretty = serde_json::to_string_pretty(&transformed)
+                .unwrap_or_else(|_| "序列化失败".to_string());
             println!("{pretty}");
         }
         Err(e) => {
