@@ -41,3 +41,4 @@ mainWindow.js
 .trae/
 .workbuddy/
 target/
+cli_err.txt

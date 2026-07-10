@@ -1,3 +1,0 @@
-[2026-07-08T14:46:40Z INFO  cc_switch_core::database::schema] 已插入 163 条默认模型定价数据
-[2026-07-08T14:46:42Z INFO  cc_switch_core::database::schema] 已插入 163 条默认模型定价数据
-[2026-07-08T14:46:42Z INFO  cc_switch_core::database::schema] 已插入 163 条默认模型定价数据
