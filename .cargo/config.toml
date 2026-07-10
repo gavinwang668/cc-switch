@@ -1,0 +1,5 @@
+# CC Switch Cargo Configuration
+# CLI has 80+ command variants; clap parser requires larger stack on Windows
+
+[target.'cfg(windows)']
+rustflags = ["-C", "link-args=/STACK:8388608"]

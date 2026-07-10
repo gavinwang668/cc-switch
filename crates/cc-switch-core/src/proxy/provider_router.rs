@@ -50,6 +50,7 @@ impl ProviderRouter {
 
         if auto_failover_enabled {
             // 故障转移开启：仅按队列顺序依次尝试（P1 → P2 → ...）
+            // get_all_providers 已过滤 disabled=0，无需额外过滤
             let all_providers = self.db.get_all_providers(app_type)?;
 
             // 使用 DAO 返回的排序结果，确保和前端展示一致
@@ -78,6 +79,7 @@ impl ProviderRouter {
             }
         } else {
             // 故障转移关闭：仅使用当前供应商，跳过熔断器检查
+            // get_current_provider 查询 is_current=1 的行，disabled 列已在 DAO 层过滤
             let current_id = AppType::from_str(app_type)
                 .ok()
                 .and_then(|app_enum| {
@@ -88,7 +90,12 @@ impl ProviderRouter {
                 .or_else(|| self.db.get_current_provider(app_type).ok().flatten());
 
             if let Some(current_id) = current_id {
-                if let Some(current) = self.db.get_provider_by_id(&current_id, app_type)? {
+                // 跳过被禁用的供应商
+                if self.db.is_provider_disabled(&current_id, app_type) {
+                    log::warn!(
+                        "[{app_type}] 当前供应商 {current_id} 已被禁用，跳过代理路由"
+                    );
+                } else if let Some(current) = self.db.get_provider_by_id(&current_id, app_type)? {
                     total_providers = 1;
                     result.push(current);
                 }

@@ -30,8 +30,6 @@ pub use cc_switch_core::usage_events;
 pub use cc_switch_core::usage_script;
 
 // Tauri-specific 模块（保留在 src-tauri）
-mod app_store;
-mod auto_launch;
 pub use cc_switch_tauri_commands::commands;
 mod lightweight;
 #[cfg(target_os = "linux")]
@@ -329,7 +327,7 @@ pub fn run() {
             let _ = rustls::crypto::ring::default_provider().install_default();
 
             // 预先刷新 Store 覆盖配置，确保后续路径读取正确（日志/数据库等）
-            app_store::refresh_app_config_dir_override(app.handle());
+            cc_switch_tauri_commands::app_store::refresh_app_config_dir_override(app.handle());
             panic_hook::init_app_config_dir(crate::config::get_app_config_dir());
             #[cfg(target_os = "windows")]
             set_windows_app_user_model_id(app.handle());
@@ -851,7 +849,7 @@ pub fn run() {
             }
 
             // 迁移旧的 app_config_dir 配置到 Store
-            if let Err(e) = app_store::migrate_app_config_dir_from_settings(app.handle()) {
+            if let Err(e) = cc_switch_tauri_commands::app_store::migrate_app_config_dir_from_settings(app.handle()) {
                 log::warn!("迁移 app_config_dir 失败: {e}");
             }
 

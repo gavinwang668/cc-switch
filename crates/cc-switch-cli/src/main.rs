@@ -16,7 +16,7 @@ use cc_switch_core::Database;
 // ============================================================================
 
 #[derive(Parser)]
-#[command(name = "cc-switch-cli", about = "cc-switch 命令行管理工具")]
+#[command(name = "cc-switch-cli", about = "cc-switch 命令行管理工具", disable_help_subcommand = true)]
 struct Cli {
     /// 日志级别 (error/warn/info/debug/trace)
     #[arg(long, global = true, default_value = "info")]
@@ -897,6 +897,23 @@ fn is_process_alive(pid: u32) -> bool {
         .unwrap_or(false)
 }
 
+/// 强制终止进程（stop 命令的回退停止手段）
+#[cfg(unix)]
+fn kill_process(pid: u32) -> bool {
+    // SIGKILL 确保进程被终止
+    unsafe { libc::kill(pid as i32, libc::SIGKILL) == 0 }
+}
+
+#[cfg(not(unix))]
+fn kill_process(pid: u32) -> bool {
+    use std::process::Command;
+    Command::new("taskkill")
+        .args(["/f", "/pid", &pid.to_string()])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 // ============================================================================
 // 命令实现
 // ============================================================================
@@ -1015,9 +1032,10 @@ fn cmd_daemon() {
         .arg("--internal-daemon")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::from(
-            log_file
-                .try_clone()
-                .unwrap_or_else(|_| log_file.try_clone().unwrap()),
+            log_file.try_clone().unwrap_or_else(|e| {
+                eprintln!("无法复制日志文件句柄: {e}");
+                std::process::exit(1);
+            }),
         ))
         .stderr(std::process::Stdio::from(log_file));
 
@@ -1403,6 +1421,10 @@ fn cmd_switch_provider(app: &str, id: &str) {
 }
 
 /// stop: 停止代理服务器（通过 HTTP POST /stop 通知后台进程停止）
+///
+/// 优先走 HTTP 优雅停止（后台进程会恢复 Live 配置并清理 PID 文件）；
+/// 若 HTTP 停止失败（端口被其他进程占用、旧版本不兼容返回非 2xx、
+/// 或后台进程已异常），则回退到 PID 文件强杀，保证命令总能停止服务。
 fn cmd_stop() {
     let listen_address =
         std::env::var("CC_SWITCH_LISTEN").unwrap_or_else(|_| "127.0.0.1".to_string());
@@ -1413,7 +1435,7 @@ fn cmd_stop() {
 
     let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio runtime");
 
-    rt.block_on(async {
+    let http_ok = rt.block_on(async {
         let url = format!("http://{}:{}/stop", listen_address, listen_port);
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
@@ -1436,30 +1458,63 @@ fn cmd_stop() {
                                 if !is_process_alive(pid) {
                                     remove_pid_file();
                                     println!("代理服务器已停止");
-                                    return;
+                                    return true;
                                 }
                             }
                             None => {
                                 // PID 文件已被删除，说明进程已清理退出
                                 println!("代理服务器已停止");
-                                return;
+                                return true;
                             }
                         }
                     }
                     println!("停止信号已发送，进程可能仍在清理中，请稍后检查状态");
+                    true
                 } else {
-                    eprintln!("停止代理服务器失败: HTTP {status}");
-                    eprintln!("请确认代理服务器正在运行");
-                    std::process::exit(1);
+                    eprintln!(
+                        "HTTP 停止失败: {}（{}:{} 上可能不是本代理守护进程，或版本不兼容）",
+                        status, listen_address, listen_port
+                    );
+                    false
                 }
             }
             Err(e) => {
-                eprintln!("停止代理服务器失败: {e}");
-                eprintln!("请确认代理服务器正在运行");
-                std::process::exit(1);
+                eprintln!(
+                    "HTTP 停止失败: {}（无法连接 {}:{}，可能端口被其他进程占用或服务未运行）",
+                    e, listen_address, listen_port
+                );
+                false
             }
         }
     });
+
+    if http_ok {
+        return;
+    }
+
+    // ── 回退：通过 PID 文件强杀 ──────────────────────────────────────────
+    eprintln!("回退到 PID 文件强杀...");
+    match read_pid_file() {
+        Some(pid) => {
+            if is_process_alive(pid) {
+                if kill_process(pid) {
+                    remove_pid_file();
+                    println!("代理服务器已强制停止 (PID: {pid})");
+                } else {
+                    eprintln!("强制停止 PID {pid} 失败，请手动执行: taskkill /f /pid {pid}");
+                    std::process::exit(1);
+                }
+            } else {
+                // PID 文件残留但进程已退出，清理即可
+                remove_pid_file();
+                println!("代理服务器已停止（清理残留 PID 文件）");
+            }
+        }
+        None => {
+            eprintln!("未找到 PID 文件，无法定位进程。请手动停止: taskkill /f /im cc-switch-cli.exe");
+            std::process::exit(1);
+        }
+    }
 }
 
 /// settings: 查看或修改设备级设置（~/.cc-switch/settings.json）
@@ -2527,7 +2582,7 @@ fn cmd_apply_config(path: &str) {
     };
     // CLI 模式：proxy_service = None，代理字段会被跳过并提示
     let ctx = cc_switch_core::core::decl_config::ApplyContext::new(&db);
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Runtime::new().expect("无法创建 tokio 运行时");
     match rt.block_on(config.apply(&ctx)) {
         Ok(summary) => {
             println!("✓ 配置已应用:");
@@ -4455,7 +4510,7 @@ fn cmd_diff(path: &str) {
     }
 }
 
-/// rollback: 回滚到上一个 apply 前的备份
+/// rollback: 回滚到上一个 apply-config 前的备份
 fn cmd_rollback() {
     let db = match init_db() {
         Ok(d) => d,
@@ -4464,24 +4519,22 @@ fn cmd_rollback() {
             std::process::exit(1);
         }
     };
-    let backups = match cc_switch_core::Database::list_backups() {
-        Ok(b) => b,
+    // 从 settings 表读取 apply() 前自动保存的备份文件名
+    let backup_name = match db.get_setting("last_apply_backup") {
+        Ok(Some(name)) => name,
+        Ok(None) => {
+            eprintln!("没有找到 apply 回滚备份。每次执行 apply-config 会自动创建备份。");
+            std::process::exit(1);
+        }
         Err(e) => {
-            eprintln!("列出备份失败: {e}");
+            eprintln!("读取回滚备份记录失败: {e}");
             std::process::exit(1);
         }
     };
-    let apply_backups: Vec<_> = backups
-        .iter()
-        .filter(|b| b.filename.contains("apply-rollback"))
-        .collect();
-    if apply_backups.is_empty() {
-        eprintln!("没有找到 apply 回滚备份。每次执行 apply-config 会自动创建备份。");
-        std::process::exit(1);
-    }
-    let latest = &apply_backups.last().unwrap().filename;
-    match db.restore_from_backup(latest) {
-        Ok(_) => println!("✓ 已回滚到备份: {latest}"),
+    // 清除记录，防止二次回滚
+    let _ = db.delete_setting("last_apply_backup");
+    match db.restore_from_backup(&backup_name) {
+        Ok(_) => println!("✓ 已回滚到备份: {backup_name}"),
         Err(e) => {
             eprintln!("回滚失败: {e}");
             std::process::exit(1);

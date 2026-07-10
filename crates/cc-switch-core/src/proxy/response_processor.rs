@@ -946,6 +946,9 @@ mod tests {
             #[cfg(feature = "tauri")]
             app_handle: None,
             failover_manager: Arc::new(FailoverSwitchManager::new(db)),
+            ingress_auth: Arc::new(RwLock::new(
+                crate::proxy::ingress_auth::IngressAuthLayer::new(None, vec![]),
+            )),
             shutdown_tx: Arc::new(RwLock::new(None)),
         }
     }

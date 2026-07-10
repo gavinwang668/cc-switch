@@ -164,7 +164,7 @@ fn spawn_worker_task(future: impl std::future::Future<Output = ()> + Send + 'sta
     if let Ok(handle) = tokio::runtime::Handle::try_current() {
         handle.spawn(future);
     } else {
-        tokio::spawn(future);
+        log::warn!("WebDAV auto-sync: no Tokio runtime available, skipping worker spawn");
     }
 }
 

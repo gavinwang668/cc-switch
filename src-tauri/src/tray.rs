@@ -633,42 +633,6 @@ pub async fn create_tray_menu(
     Ok(menu)
 }
 
-/// 就地更新各 app 分区子菜单的标题（usage 后缀变化时走这条），
-/// 避免 `set_menu` 导致用户打开中的菜单被关闭。
-/// 句柄由上一次 `create_tray_menu` 填充；为空（从未构建过菜单）时无事发生。
-fn update_tray_usage_labels(app: &tauri::AppHandle) {
-    let Some(app_state) = app.try_state::<AppState>() else {
-        return;
-    };
-    let handles = match TRAY_SECTION_SUBMENUS.lock() {
-        Ok(g) => g,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-
-    for section in TRAY_SECTIONS.iter() {
-        let Some(submenu) = handles.get(&section.app_type) else {
-            continue;
-        };
-        let Ok(providers) = app_state.db.get_all_providers(section.app_type.as_str()) else {
-            continue;
-        };
-        let Ok(Some(current_id)) =
-            crate::settings::get_effective_current_provider(&app_state.db, &section.app_type)
-        else {
-            continue;
-        };
-        let Some(provider) = providers.get(&current_id) else {
-            continue;
-        };
-        let suffix = format_usage_suffix(&app_state, &section.app_type, provider, &current_id)
-            .unwrap_or_default();
-        let new_label = format!("{} · {}{}", section.header_label, provider.name, suffix);
-        if let Err(e) = submenu.set_text(&new_label) {
-            log::debug!("[Tray] 更新{}子菜单标题失败: {e}", section.log_name);
-        }
-    }
-}
-
 pub fn refresh_tray_menu(app: &tauri::AppHandle) {
     use crate::store::AppState;
 
@@ -760,27 +724,6 @@ pub fn handle_tray_menu_event(app: &tauri::AppHandle, event_id: &str) {
 static LAST_TRAY_USAGE_REFRESH: std::sync::Mutex<Option<std::time::Instant>> =
     std::sync::Mutex::new(None);
 const MIN_TRAY_USAGE_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
-
-/// 合并多次快速触发的"usage 标题软更新"：批量刷新期间多个 usage 命令
-/// 同时成功时，只会产生一次就地 `set_text` 批量调用。走软更新而不是
-/// `refresh_tray_menu` 整建，避免用户打开中的菜单被 macOS 系统关闭。
-static TRAY_REBUILD_SCHEDULED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-
-pub fn schedule_tray_refresh(app: &tauri::AppHandle) {
-    use std::sync::atomic::Ordering;
-    if TRAY_REBUILD_SCHEDULED.swap(true, Ordering::AcqRel) {
-        return;
-    }
-    let app = app.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        // 50ms 合窗：让同一轮 React Query / 托盘批量刷新触发的多个写入
-        // 共享一次标题更新。
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        TRAY_REBUILD_SCHEDULED.store(false, Ordering::Release);
-        update_tray_usage_labels(&app);
-    });
-}
 
 /// 并行刷新每个可见 app "当前 provider" 的用量；成功 / 失败结果都通过各
 /// command 的 write-through 逻辑写入 `UsageCache`，单次重建菜单由

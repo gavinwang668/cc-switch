@@ -42,7 +42,6 @@ pub struct Provider {
     #[serde(rename = "inFailoverQueue")]
     pub in_failover_queue: bool,
 }
-
 impl Provider {
     /// 从现有ID创建供应商
     pub fn with_id(

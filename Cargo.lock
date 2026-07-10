@@ -919,7 +919,6 @@ name = "cc-switch-core"
 version = "3.16.5"
 dependencies = [
  "anyhow",
- "arboard",
  "async-stream",
  "axum",
  "base64 0.22.1",

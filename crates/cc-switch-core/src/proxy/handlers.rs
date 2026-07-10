@@ -70,10 +70,15 @@ pub async fn get_status(State(state): State<ProxyState>) -> Result<Json<ProxySta
 /// 由 CLI `stop` 子命令调用。从共享的 shutdown 通道取出 sender 并发送信号，
 /// 触发 `ProxyServer::start` 中的 accept loop 退出。
 pub async fn stop_server(State(state): State<ProxyState>) -> (StatusCode, Json<Value>) {
+    // 先把 sender 取出，再在后台 fire-and-forget 触发关闭。
+    // 这样无论关闭路径中发生什么，handler 都能立即返回 200，
+    // 避免关闭过程中的 panic 被 axum 转换为 500（CLI `stop` 会因此误判失败）。
     let tx = state.shutdown_tx.write().await.take();
     if let Some(tx) = tx {
-        let _ = tx.send(());
-        log::info!("[ProxyServer] 收到远程停止请求，正在关闭...");
+        tokio::spawn(async move {
+            let _ = tx.send(());
+            log::info!("[ProxyServer] 收到远程停止请求，正在关闭...");
+        });
         (
             StatusCode::OK,
             Json(json!({ "status": "stopping", "message": "shutdown signal sent" })),

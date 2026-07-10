@@ -13,7 +13,7 @@ doctest = false
 
 [features]
 default = []
-tauri = ["dep:tauri"]
+tauri = ["dep:tauri", "dep:keyring"]
 test-hooks = []
 
 # Tauri 为 optional 依赖：CLI 不启用，GUI (cc-switch-app) 通过 feature 启用。
@@ -66,22 +66,19 @@ json-five = "0.3.1"
 flate2 = "1"
 brotli = "7"
 zstd = "0.13"
-arboard = "3.6"
 ipnet = "2"
 tauri = { version = "2.8.2", features = ["tray-icon", "protocol-asset", "image-png"], optional = true }
+keyring = { version = "3.6", features = ["windows-native"], optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
-
-[target.'cfg(not(target_os = "linux"))'.dependencies]
-keyring = { version = "3.6", features = ["windows-native"] }
 
 [target.'cfg(all(target_os = "windows", target_arch = "aarch64"))'.dependencies]
 rquickjs = { version = "0.8", features = ["bindgen"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.52"
-windows-sys = { version = "0.61", features = ["Win32_Globalization", "Win32_UI_Shell"] }
+windows-sys = { version = "0.61", features = ["Win32_Globalization"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.5"

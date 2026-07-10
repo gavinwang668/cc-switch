@@ -26,16 +26,12 @@ impl AppState {
 // API Key 安全管理
 // ============================================================================
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(feature = "tauri")]
 const KEYCHAIN_SERVICE: &str = "cc-switch";
 
 /// 将 API Key 安全存储到系统 Keychain
-///
-/// 使用 provider_id + app_type 作为唯一标识，通过操作系统级凭证管理器存储。
-/// - Windows: Windows Credential Manager
-/// - macOS: Keychain
-/// - Linux: 不可用（CLI 模式无需 Keychain）
-#[cfg(not(target_os = "linux"))]
+/// CLI 模式（无 tauri feature）不可用
+#[cfg(feature = "tauri")]
 pub fn set_api_key(provider_id: &str, app_type: &str, api_key: &str) -> Result<(), String> {
     let entry = keyring::Entry::new(KEYCHAIN_SERVICE, &keychain_account(provider_id, app_type))
         .map_err(|e| format!("Failed to create keychain entry: {}", e))?;
@@ -44,8 +40,8 @@ pub fn set_api_key(provider_id: &str, app_type: &str, api_key: &str) -> Result<(
         .map_err(|e| format!("Failed to store API key: {}", e))
 }
 
-/// 从系统 Keychain 读取 API Key
-#[cfg(not(target_os = "linux"))]
+/// 从系统 Keychain 读取 API Key (CLI 不可用)
+#[cfg(feature = "tauri")]
 pub fn get_api_key(provider_id: &str, app_type: &str) -> Result<Option<String>, String> {
     let entry = keyring::Entry::new(KEYCHAIN_SERVICE, &keychain_account(provider_id, app_type))
         .map_err(|e| format!("Failed to create keychain entry: {}", e))?;
@@ -56,8 +52,8 @@ pub fn get_api_key(provider_id: &str, app_type: &str) -> Result<Option<String>, 
     }
 }
 
-/// 从系统 Keychain 删除 API Key
-#[cfg(not(target_os = "linux"))]
+/// 从系统 Keychain 删除 API Key (CLI 不可用)
+#[cfg(feature = "tauri")]
 pub fn delete_api_key(provider_id: &str, app_type: &str) -> Result<(), String> {
     let entry = keyring::Entry::new(KEYCHAIN_SERVICE, &keychain_account(provider_id, app_type))
         .map_err(|e| format!("Failed to create keychain entry: {}", e))?;

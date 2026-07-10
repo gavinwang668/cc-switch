@@ -12,18 +12,15 @@
 //! 在不依赖 src-tauri 的情况下也能编译；运行时由 src-tauri 中的真实实现接管。
 
 pub mod commands;
+pub mod app_store;
+pub mod auto_launch;
 
-// ── GUI 专属功能桩实现 ─────────────────────────────────────
+// ── 退出路径清理函数桩 ─────────────────────────────────────
 //
-// 这些函数/模块在 `src-tauri/src/` 中有真实实现。cc-switch-tauri-commands
-// 中的命令在调用它们时，实际由 src-tauri 中的实现接管（src-tauri 既链接
-// 本 crate，也链接自己的实现；本 crate 的桩仅用于独立编译时的占位）。
-//
-// 桩实现策略：
-// - 能用 Tauri 公共 API 直接实现的功能（如保存窗口状态、重启进程）→ 真实实现
-// - 涉及 src-tauri 私有状态/插件的功能（如代理清理、托盘图标移除、
-//   single-instance 锁释放）→ no-op，由 src-tauri 在 ExitRequested 路径中
-//   自行处理
+// 这些函数在 src-tauri/src/lib.rs 中有真实实现，依赖 src-tauri 私有状态
+// （代理 service、托盘图标、single-instance 锁等）。cc-switch-tauri-commands
+// 中的命令在退出/重启路径上调用它们，运行时由 src-tauri 中的实现接管；
+// 此处的桩仅用于独立编译时的占位。
 
 /// 轻量模式桩模块
 ///
@@ -49,29 +46,6 @@ pub mod lightweight {
     }
 }
 
-/// 自启动桩模块
-///
-/// 完整实现在 `src-tauri/src/auto_launch.rs`，依赖 `auto-launch` crate。
-pub mod auto_launch {
-    /// 启用开机自启。
-    pub fn enable_auto_launch() -> Result<(), String> {
-        // 桩实现：真实逻辑在 src-tauri/src/auto_launch.rs
-        Ok(())
-    }
-
-    /// 禁用开机自启。
-    pub fn disable_auto_launch() -> Result<(), String> {
-        // 桩实现：真实逻辑在 src-tauri/src/auto_launch.rs
-        Ok(())
-    }
-
-    /// 查询开机自启是否已启用。
-    pub fn is_auto_launch_enabled() -> Result<bool, String> {
-        // 桩实现：始终返回 false，真实状态由 src-tauri 查询
-        Ok(false)
-    }
-}
-
 /// 托盘桩模块
 ///
 /// 完整实现在 `src-tauri/src/tray.rs`，依赖 tauri::menu / Emitter 等。
@@ -82,34 +56,6 @@ pub mod tray {
     /// 包含合并与节流逻辑。
     pub fn schedule_tray_refresh(_app: &tauri::AppHandle) {
         // 桩实现：no-op，真实刷新由 src-tauri 中的实现接管
-    }
-}
-
-/// app_config_dir Store 桩模块
-///
-/// 完整实现在 `src-tauri/src/app_store.rs`，依赖 tauri-plugin-store。
-/// cc-switch-core 中也有同名桩模块；此处的桩使 tauri-commands 内部调用
-/// `crate::app_store::xxx` 时能解析到符号。
-pub mod app_store {
-    use std::path::PathBuf;
-
-    /// 刷新 app_config_dir 覆盖值（从 Store 读取并更新缓存）。
-    ///
-    /// 桩实现返回 None；真实逻辑在 src-tauri/src/app_store.rs。
-    pub fn refresh_app_config_dir_override(_app: &tauri::AppHandle) -> Option<PathBuf> {
-        // 桩实现：始终返回 None，真实状态由 src-tauri 维护
-        None
-    }
-
-    /// 将 app_config_dir 写入 Tauri Store。
-    ///
-    /// 桩实现直接返回 Ok；真实逻辑在 src-tauri/src/app_store.rs。
-    pub fn set_app_config_dir_to_store(
-        _app: &tauri::AppHandle,
-        _path: Option<&str>,
-    ) -> Result<(), cc_switch_core::error::AppError> {
-        // 桩实现：no-op
-        Ok(())
     }
 }
 

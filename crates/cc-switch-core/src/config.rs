@@ -15,12 +15,27 @@ use crate::error::AppError;
 /// - 不要直接使用 `HOME` 环境变量：它可能由 Git/Cygwin/MSYS 等第三方工具注入，
 ///   且不一定等于用户目录，可能导致 `.cc-switch/cc-switch.db` 路径变化，从而“看起来像数据丢失”。
 ///
-/// ## 测试隔离
+/// ## 数据目录覆盖
 ///
-/// 为了让 Windows CI/本地测试能稳定隔离真实用户数据，可通过 `CC_SWITCH_TEST_HOME`
-/// 显式覆盖 home dir（仅用于测试/调试场景）。
+/// 支持两个环境变量覆盖 home dir，优先级从高到低：
+///
+/// 1. `CC_SWITCH_TEST_HOME` — 测试专用，优先级最高，用于 CI/本地测试隔离真实用户数据。
+///    生产环境不应设置此变量。
+/// 2. `CC_SWITCH_HOME` — 生产环境覆盖，用于无头服务器/容器部署等场景指定数据目录
+///    （如 `~/.cc-switch/cc-switch.db` 所在的 home）。
+///
+/// 二者均未设置时，回退到 `dirs::home_dir()`。
 pub fn get_home_dir() -> PathBuf {
+    // 测试专用变量优先级最高，确保测试不会误读生产覆盖变量
     if let Ok(home) = std::env::var("CC_SWITCH_TEST_HOME") {
+        let trimmed = home.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+
+    // 生产环境覆盖变量
+    if let Ok(home) = std::env::var("CC_SWITCH_HOME") {
         let trimmed = home.trim();
         if !trimmed.is_empty() {
             return PathBuf::from(trimmed);

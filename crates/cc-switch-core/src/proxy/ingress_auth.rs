@@ -29,6 +29,42 @@ impl IngressAuthLayer {
     pub fn is_enabled(&self) -> bool {
         self.token.is_some() || !self.acl_cidrs.is_empty()
     }
+
+    /// 纯验证方法（无 axum 依赖），供 server 中间件复用
+    pub fn validate_request(
+        &self,
+        ip: std::net::IpAddr,
+        auth_header: Option<&str>,
+    ) -> Result<(), StatusCode> {
+        // 1. 校验 IP CIDR
+        if !self.acl_cidrs.is_empty() {
+            let allowed = self.acl_cidrs.iter().any(|cidr_str| {
+                if let Ok(net) = cidr_str.parse::<ipnet::IpNet>() {
+                    net.contains(&ip)
+                } else {
+                    false
+                }
+            });
+            if !allowed {
+                log::warn!("Ingress ACL 拒绝: {ip} (不在白名单中)");
+                return Err(StatusCode::FORBIDDEN);
+            }
+        }
+
+        // 2. 校验 Bearer token
+        if let Some(expected) = &self.token {
+            let provided = auth_header
+                .and_then(|v| v.strip_prefix("Bearer "))
+                .unwrap_or("")
+                .trim();
+            if provided != expected.as_str() {
+                log::warn!("Ingress auth token 不匹配");
+                return Err(StatusCode::UNAUTHORIZED);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Axum middleware 函数

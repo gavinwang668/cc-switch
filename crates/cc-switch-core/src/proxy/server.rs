@@ -11,6 +11,7 @@
 use super::{
     failover_switch::FailoverSwitchManager,
     handlers,
+    ingress_auth::IngressAuthLayer,
     log_codes::srv as log_srv,
     provider_router::ProviderRouter,
     providers::{codex_chat_history::CodexChatHistoryStore, gemini_shadow::GeminiShadowStore},
@@ -19,7 +20,10 @@ use super::{
 };
 use crate::database::Database;
 use axum::{
-    extract::DefaultBodyLimit,
+    extract::{ConnectInfo, DefaultBodyLimit, Request},
+    http::StatusCode,
+    middleware::Next,
+    response::Response,
     routing::{any, get, post},
     Router,
 };
@@ -49,6 +53,8 @@ pub struct ProxyState {
     pub app_handle: Option<crate::TauriAppHandle>,
     /// 故障转移切换管理器
     pub failover_manager: Arc<FailoverSwitchManager>,
+    /// 入口访问控制层（auth token + ACL CIDR 白名单）
+    pub ingress_auth: Arc<RwLock<IngressAuthLayer>>,
     /// 共享的 shutdown 信号发送端，允许 HTTP handler（如 POST /stop）触发服务器停止
     pub shutdown_tx: Arc<RwLock<Option<oneshot::Sender<()>>>>,
 }
@@ -86,6 +92,7 @@ impl ProxyServer {
             #[cfg(feature = "tauri")]
             app_handle,
             failover_manager,
+            ingress_auth: Arc::new(RwLock::new(IngressAuthLayer::new(None, vec![]))),
             shutdown_tx: shutdown_tx.clone(),
         };
 
@@ -109,6 +116,9 @@ impl ProxyServer {
 
         // 创建关闭通道
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
+        // 从 DB 加载入口访问控制（auth_token / ACL）到运行时状态
+        self.load_ingress_auth().await;
 
         // 构建路由
         let app = self.build_router();
@@ -293,9 +303,70 @@ impl ProxyServer {
         );
     }
 
+    /// 入口访问控制中间件 — 校验 auth_token / ACL CIDR
+    ///
+    /// 放行 /health、/status、/stop 三个运维端点。
+    async fn ingress_auth_middleware_handler(
+        state: axum::extract::State<ProxyState>,
+        ConnectInfo(addr): ConnectInfo<SocketAddr>,
+        req: Request,
+        next: Next,
+    ) -> Result<Response, StatusCode> {
+        // 放行运维端点
+        let path = req.uri().path();
+        if path == "/health" || path == "/status" || path == "/stop" || path == "/__internal/reload" {
+            return Ok(next.run(req).await);
+        }
+
+        // 仅在短临界区内读取并校验，避免每次请求都克隆整个 CIDR 列表，
+        // 也不在 next.run(req).await 期间持有读锁（否则会阻塞 reload 写锁）。
+        let auth_header = req
+            .headers()
+            .get("authorization")
+            .and_then(|v| v.to_str().ok());
+
+        let result = {
+            let guard = state.ingress_auth.read().await;
+            if !guard.is_enabled() {
+                None
+            } else {
+                Some(guard.validate_request(addr.ip(), auth_header))
+            }
+        };
+
+        if let Some(Err(status)) = result {
+            return Err(status);
+        }
+        Ok(next.run(req).await)
+    }
+
+    /// 从 DB 加载入口访问控制配置（proxy_auth_token / proxy_acl_cidrs）到运行时状态。
+    ///
+    /// 服务器启动时与热重载时调用，确保 `auth-token` / `acl` 命令写入的
+    /// 访问控制配置对运行中的代理生效。
+    pub async fn load_ingress_auth(&self) {
+        let token = self.state.db.get_proxy_auth_token().ok().flatten();
+        let cidrs = self.state.db.get_proxy_acl_cidrs().ok().unwrap_or_default();
+        *self.state.ingress_auth.write().await = IngressAuthLayer::new(token.clone(), cidrs.clone());
+        log::info!(
+            "[proxy] 已加载入口访问控制: token={}, acl={} 条",
+            if token.is_some() { "已设置" } else { "无" },
+            cidrs.len()
+        );
+    }
+
+    /// 内部热重载端点处理器：刷新入口访问控制等运行时配置。
+    async fn handle_reload(state: axum::extract::State<ProxyState>) -> StatusCode {
+        let token = state.db.get_proxy_auth_token().ok().flatten();
+        let cidrs = state.db.get_proxy_acl_cidrs().ok().unwrap_or_default();
+        *state.ingress_auth.write().await = IngressAuthLayer::new(token, cidrs);
+        log::info!("[proxy] 入口访问控制已热重载");
+        StatusCode::OK
+    }
+
     fn build_router(&self) -> Router {
         Router::new()
-            // 健康检查
+            // 健康检查（放行，不受 ingress auth 限制）
             .route("/health", get(handlers::health_check))
             .route("/status", get(handlers::get_status))
             // 远程停止服务器（CLI `stop` 命令调用）
@@ -352,15 +423,16 @@ impl ProxyServer {
                 post(handlers::handle_responses_compact),
             )
             // Gemini API (支持带前缀和不带前缀)
-            //
-            // 用 `any(..)` 覆盖所有 HTTP 方法：除了 POST `:generateContent` /
-            // `:streamGenerateContent` / `:countTokens` 之外，Gemini SDK / CLI 还会发
-            // GET `/models`、GET `/models/<id>` 等只读端点。如果只挂 POST，这些 GET
-            // 请求会在路由层 404，绕过本地代理的统计、整流和故障转移。
             .route("/v1beta/*path", any(handlers::handle_gemini))
             .route("/gemini/v1beta/*path", any(handlers::handle_gemini))
-            // Gemini 的 GA 版本也叫 /v1，给原 SDK 留一条出口
             .route("/gemini/v1/*path", any(handlers::handle_gemini))
+            // 内部热重载端点（放行，不受 ingress auth 限制；由 CLI `reload` 命令调用）
+            .route("/__internal/reload", post(Self::handle_reload))
+            // 入口访问控制（auth_token + ACL），放行运维端点后，其余路由全部校验
+            .route_layer(axum::middleware::from_fn_with_state(
+                self.state.clone(),
+                Self::ingress_auth_middleware_handler,
+            ))
             // 提高默认请求体大小限制（避免 413 Payload Too Large）
             .layer(DefaultBodyLimit::max(200 * 1024 * 1024))
             .with_state(self.state.clone())

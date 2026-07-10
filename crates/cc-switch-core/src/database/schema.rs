@@ -39,6 +39,7 @@ impl Database {
                 meta TEXT NOT NULL DEFAULT '{}',
                 is_current BOOLEAN NOT NULL DEFAULT 0,
                 in_failover_queue BOOLEAN NOT NULL DEFAULT 0,
+                disabled BOOLEAN NOT NULL DEFAULT 0,
                 PRIMARY KEY (id, app_type)
             )",
             [],
@@ -346,6 +347,14 @@ impl Database {
             conn,
             "providers",
             "in_failover_queue",
+            "BOOLEAN NOT NULL DEFAULT 0",
+        )?;
+
+        // 确保 disabled 列存在（REQ M-7 toggle-provider）
+        Self::add_column_if_missing(
+            conn,
+            "providers",
+            "disabled",
             "BOOLEAN NOT NULL DEFAULT 0",
         )?;
 

@@ -395,6 +395,8 @@ cc-switch-cli status --log-level trace
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
+| `CC_SWITCH_HOME` | `dirs::home_dir()` | 覆盖数据目录所在的 home（`~/.cc-switch/cc-switch.db` 路径基于此）。用于无头服务器/容器部署指定数据目录 |
+| `CC_SWITCH_TEST_HOME` | （未设置） | 测试专用，优先级高于 `CC_SWITCH_HOME`。生产环境不应设置 |
 | `CC_SWITCH_LISTEN` | `127.0.0.1` | 代理服务器监听地址 |
 | `CC_SWITCH_PORT` | `9090` | 代理服务器监听端口 |
 
@@ -404,6 +406,9 @@ CC_SWITCH_LISTEN=0.0.0.0 cc-switch-cli start
 
 # 使用自定义端口
 CC_SWITCH_PORT=8080 cc-switch-cli daemon
+
+# 指定数据目录（用于无头服务器/多实例部署）
+CC_SWITCH_HOME=/var/lib/cc-switch cc-switch-cli start
 ```
 
 ---

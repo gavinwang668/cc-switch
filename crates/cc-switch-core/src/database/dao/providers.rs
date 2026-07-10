@@ -24,7 +24,7 @@ impl Database {
         let conn = lock_conn!(self.conn);
         let mut stmt = conn.prepare(
             "SELECT id, name, settings_config, website_url, category, created_at, sort_index, notes, icon, icon_color, meta, in_failover_queue
-             FROM providers WHERE app_type = ?1
+             FROM providers WHERE app_type = ?1 AND disabled = 0
              ORDER BY COALESCE(sort_index, 999999), created_at ASC, id ASC"
         ).map_err(|e| AppError::Database(e.to_string()))?;
 
@@ -704,6 +704,21 @@ impl Database {
         self.save_provider(app_type_str, &provider)?;
 
         Ok(true)
+    }
+
+    /// 检查供应商是否被禁用
+    pub fn is_provider_disabled(&self, provider_id: &str, app_type: &str) -> bool {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
+        conn.query_row(
+            "SELECT disabled FROM providers WHERE id = ?1 AND app_type = ?2",
+            params![provider_id, app_type],
+            |row| row.get::<_, i32>(0),
+        )
+        .map(|v| v != 0)
+        .unwrap_or(false)
     }
 
     /// 启用/禁用供应商（REQ M-7）

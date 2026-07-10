@@ -1,4 +1,4 @@
-use crate::error::AppError;
+use cc_switch_core::error::AppError;
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 
 /// 获取 macOS 上的 .app bundle 路径

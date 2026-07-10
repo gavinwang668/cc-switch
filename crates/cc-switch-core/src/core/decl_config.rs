@@ -170,6 +170,22 @@ impl DeclConfig {
         let db = ctx.db;
         let mut actions = Vec::new();
 
+        // 0. 应用前自动创建备份（供 rollback 命令恢复）
+        match db.backup_database_file() {
+            Ok(Some(backup_path)) => {
+                if let Some(fname) = backup_path.file_name().and_then(|n| n.to_str()) {
+                    let _ = db.set_setting("last_apply_backup", fname);
+                    log::info!("apply-config 前已创建备份: {fname}");
+                }
+            }
+            Ok(None) => {
+                log::warn!("数据库文件不存在，跳过 apply 前备份");
+            }
+            Err(e) => {
+                log::warn!("apply 前备份失败（继续应用）: {e}");
+            }
+        }
+
         // 1. 应用供应商配置
         for p in &self.providers {
             let mut env = serde_json::Map::new();

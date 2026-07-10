@@ -59,7 +59,7 @@ pub(crate) struct CodexToolSpec {
 }
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct CodexToolContext {
+pub struct CodexToolContext {
     chat_tools: Vec<Value>,
     seen_chat_names: HashSet<String>,
     chat_name_to_spec: HashMap<String, CodexToolSpec>,
