@@ -7,8 +7,8 @@
 ### 1. CLIをビルド
 
 ```bash
-cd src-tauri
-cargo build --release --bin cc-switch-cli
+# ワークスペースのルートで実行（src-tauri 内ではありません）
+cargo build --release -p cc-switch-cli
 # バイナリは target/release/cc-switch-cli にあります
 ```
 
