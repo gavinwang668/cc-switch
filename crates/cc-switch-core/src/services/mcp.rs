@@ -176,24 +176,50 @@ impl McpService {
         Ok(())
     }
 
-    /// 手动同步所有启用的 MCP 服务器到对应的应用
+    /// 手动同步所有启用的 MCP 服务器到对应的应用。
+    ///
+    /// Best-effort：单个应用投影失败（如 ~/.claude.json 坏 JSON）不阻断
+    /// 其余应用——各应用的 live 文件互相独立，一处损坏没有理由让其他
+    /// 应用的 MCP 状态陈旧。全部跑完后若有失败，聚合成一个错误上报，
+    /// 保留调用方的可见性。
     pub fn sync_all_enabled(state: &AppState) -> Result<(), AppError> {
-        let servers = Self::get_all_servers(state)?;
-
+        let mut failures: Vec<String> = Vec::new();
         for app in AppType::all() {
             if matches!(app, AppType::OpenClaw | AppType::ClaudeDesktop) {
                 continue;
             }
 
-            for server in servers.values() {
-                if server.apps.is_enabled_for(&app) {
-                    Self::sync_server_to_app(state, server, &app)?;
-                } else {
-                    Self::remove_server_from_app(state, &server.id, &app)?;
-                }
+            if let Err(err) = Self::sync_enabled_for_app(state, &app) {
+                log::warn!("同步 MCP 到 {app:?} 失败: {err}");
+                failures.push(format!("{}: {err}", app.as_str()));
             }
         }
 
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(AppError::Message(format!(
+                "部分应用 MCP 同步失败: {}",
+                failures.join("; ")
+            )))
+        }
+    }
+
+    /// 只把启用状态投影到单个应用。某个应用的 live 被整体重写后用它做
+    /// 定向重投影，避免把无关应用的失败面（如 ~/.claude.json 坏 JSON）
+    /// 牵连进目标应用的关键路径。
+    pub fn sync_enabled_for_app(state: &AppState, app: &AppType) -> Result<(), AppError> {
+        if matches!(app, AppType::OpenClaw | AppType::ClaudeDesktop) {
+            return Ok(());
+        }
+        let servers = Self::get_all_servers(state)?;
+        for server in servers.values() {
+            if server.apps.is_enabled_for(app) {
+                Self::sync_server_to_app(state, server, app)?;
+            } else {
+                Self::remove_server_from_app(state, &server.id, app)?;
+            }
+        }
         Ok(())
     }
 
