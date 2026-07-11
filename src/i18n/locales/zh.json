@@ -1896,7 +1896,8 @@
     "applySuccess": "项目已应用",
     "applyFailed": "应用项目失败: {{detail}}",
     "applyWarnings": "项目已应用，{{warningCount}} 条警告：\n{{details}}",
-    "clearSuccess": "已切换为不使用项目"
+    "clearSuccess": "已切换为不使用项目",
+    "clearFailed": "切换为不使用项目失败: {{detail}}"
   },
   "workspace": {
     "title": "Workspace 文件管理",

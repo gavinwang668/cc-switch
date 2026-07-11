@@ -1896,7 +1896,8 @@
     "applySuccess": "プロジェクトを適用しました",
     "applyFailed": "プロジェクトの適用に失敗しました: {{detail}}",
     "applyWarnings": "プロジェクトを適用しました（警告 {{warningCount}} 件）：\n{{details}}",
-    "clearSuccess": "プロジェクトを使用しない状態に切り替えました"
+    "clearSuccess": "プロジェクトを使用しない状態に切り替えました",
+    "clearFailed": "プロジェクトを使用しない状態への切り替えに失敗しました: {{detail}}"
   },
   "workspace": {
     "title": "ワークスペースファイル",

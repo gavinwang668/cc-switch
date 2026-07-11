@@ -100,7 +100,7 @@ export const useClearProfileMutation = () => {
     },
     onError: (error: Error) => {
       const detail = extractErrorMessage(error) || t("common.unknown");
-      toast.error(t("profiles.applyFailed", { detail }), {
+      toast.error(t("profiles.clearFailed", { detail }), {
         closeButton: true,
       });
     },

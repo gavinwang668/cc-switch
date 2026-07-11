@@ -1896,7 +1896,8 @@
     "applySuccess": "Project applied",
     "applyFailed": "Failed to apply project: {{detail}}",
     "applyWarnings": "Project applied with {{warningCount}} warning(s):\n{{details}}",
-    "clearSuccess": "Switched to no project"
+    "clearSuccess": "Switched to no project",
+    "clearFailed": "Failed to switch to no project: {{detail}}"
   },
   "workspace": {
     "title": "Workspace Files",

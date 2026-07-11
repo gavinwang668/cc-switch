@@ -1868,7 +1868,8 @@
     "applySuccess": "專案已套用",
     "applyFailed": "套用專案失敗: {{detail}}",
     "applyWarnings": "專案已套用，{{warningCount}} 條警告：\n{{details}}",
-    "clearSuccess": "已切換為不使用專案"
+    "clearSuccess": "已切換為不使用專案",
+    "clearFailed": "切換為不使用專案失敗: {{detail}}"
   },
   "workspace": {
     "title": "Workspace 檔案管理",
