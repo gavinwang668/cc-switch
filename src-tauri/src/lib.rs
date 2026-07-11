@@ -8,6 +8,7 @@ pub use cc_switch_core::codex_history_migration;
 pub use cc_switch_core::config;
 pub use cc_switch_core::core;
 pub use cc_switch_core::database;
+pub use cc_switch_core::database::Profile;
 pub use cc_switch_core::deeplink;
 pub use cc_switch_core::error;
 pub use cc_switch_core::gemini_config;
@@ -23,6 +24,7 @@ pub use cc_switch_core::provider;
 pub use cc_switch_core::provider_defaults;
 pub use cc_switch_core::proxy;
 pub use cc_switch_core::services;
+pub use cc_switch_core::services::profile::{ProfilePayload, ProfileService};
 pub use cc_switch_core::session_manager;
 pub use cc_switch_core::settings;
 pub use cc_switch_core::store;
@@ -1558,6 +1560,13 @@ pub fn run() {
             commands::enter_lightweight_mode,
             commands::exit_lightweight_mode,
             commands::is_lightweight_mode,
+            // Profile management (项目配置方案)
+            commands::list_profiles,
+            commands::create_profile,
+            commands::update_profile,
+            commands::delete_profile,
+            commands::clear_current_profile,
+            commands::apply_profile,
         ]);
 
     let app = builder

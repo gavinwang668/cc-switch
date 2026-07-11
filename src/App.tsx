@@ -52,8 +52,10 @@ import {
 } from "@/lib/platform";
 import { useAppRouter } from "@/hooks/useAppRouter";
 import { useAppEvents } from "@/hooks/useAppEvents";
+import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { useWindowControls } from "@/hooks/useWindowControls";
 import { AppSwitcher } from "@/components/AppSwitcher";
+import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { ProviderList } from "@/components/providers/ProviderList";
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
 import { EditProviderDialog } from "@/components/providers/EditProviderDialog";
@@ -117,6 +119,13 @@ const getInitialApp = (): AppId => {
 function App() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+
+  // 托盘应用项目后刷新相关缓存（providers 由既有 provider-switched 监听承接）
+  useTauriEvent("profile-applied", async () => {
+    await queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    await queryClient.invalidateQueries({ queryKey: ["mcp", "all"] });
+    await queryClient.invalidateQueries({ queryKey: ["skills"] });
+  });
   const { currentView, navigate, settingsDefaultTab, setSettingsDefaultTab } =
     useAppRouter();
 
@@ -924,6 +933,7 @@ function App() {
                     CC Switch
                   </a>
                 </div>
+                <ProfileSwitcher activeApp={activeApp} />
                 <Button
                   variant="ghost"
                   size="icon"
