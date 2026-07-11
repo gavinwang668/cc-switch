@@ -197,13 +197,9 @@ pub async fn toggle_mcp_app(
 /// 从所有应用导入 MCP 服务器（复用已有的导入逻辑）
 #[tauri::command]
 pub async fn import_mcp_from_apps(state: State<'_, AppState>) -> Result<usize, String> {
-    let mut total = 0;
-    total += McpService::import_from_claude(&state).unwrap_or(0);
-    total += McpService::import_from_codex(&state).unwrap_or(0);
-    total += McpService::import_from_gemini(&state).unwrap_or(0);
-    total += McpService::import_from_opencode(&state).unwrap_or(0);
-    total += McpService::import_from_hermes(&state).unwrap_or(0);
-    Ok(total)
+    // 后端按应用 best-effort 导入：单个应用坏配置不阻断其余应用，
+    // 但失败会被聚合并返回——坏文件不能再被 `unwrap_or(0)` 吞成"导入 0 个"。
+    McpService::import_from_all_apps(&state).map_err(|e| e.to_string())
 }
 
 // ============================================================================
