@@ -8,6 +8,7 @@ release/
 *.tsbuildinfo
 .npmrc
 CLAUDE.md
+docs/project-background-and-issues.md
 AGENTS.md
 GEMINI.md
 /.claude
