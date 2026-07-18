@@ -9,6 +9,7 @@ release/
 .npmrc
 CLAUDE.md
 docs/project-background-and-issues.md
+docs/xiaohongshu-post.txt
 AGENTS.md
 GEMINI.md
 /.claude
